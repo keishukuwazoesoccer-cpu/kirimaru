@@ -4440,6 +4440,8 @@ function renderAll() {
 
 (async () => {
   await DB.open();
+  // 空き容量が少ないときなどに、ブラウザが保存データを自動で消さないよう頼んでおく
+  navigator.storage?.persist?.().catch(() => {});
   TESTS.list = (await DB.get('kv', 'tests')) || [];
   GRADE.extra = (await DB.get('kv', 'grades')) || [];
   GRADE.cur = (await DB.get('kv', 'gradeCur')) ?? '*';
