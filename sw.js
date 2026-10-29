@@ -1,5 +1,5 @@
 // オフラインでも開けるように、アプリのファイルと部品（PDF・Excel用）を端末に保存しておく
-const CACHE = 'kirimaru-bc54ceeec2';
+const CACHE = 'kirimaru-bda163494a';
 const LIBS = 'kirimaru-libs';  // 部品は版が固定なので、アプリを更新しても消さない
 const FILES = ['./', './index.html', './licenses.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 const LIB_FILES = [

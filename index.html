@@ -448,8 +448,8 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
 </dialog>
 
 <dialog id="settingsDlg">
-  <h3 style="margin-top:0">AI自動採点の設定</h3>
-  <p class="muted" style="max-width:520px">AI採点を使うときだけ、該当する解答欄の切り抜き画像がAnthropic社のAPIに送信されます（氏名欄は送信しません）。APIキーはこのブラウザ内にだけ保存されます。</p>
+  <h3 style="margin-top:0">AIの設定</h3>
+  <p class="muted" style="max-width:520px">APIキーを入れると、③の「AI採点」、②の「🤖 AIで提案」（解答欄の自動提案）、⑤の「🤖 コメントをAIで下書き」が使えます。使ったときだけ、必要な画像や得点がAnthropic社のAPIに送られます（氏名は送りません）。料金はこのAPIキーの持ち主に、使った分だけかかります。APIキーはこのブラウザ内にだけ保存されます。</p>
   <p><label>Anthropic APIキー<br><input id="apiKey" type="password" style="width:420px" placeholder="sk-ant-..."></label></p>
   <p><label>モデル<br><select id="aiModel">
     <option value="claude-opus-5-5">Claude Opus 5.5（高精度）</option>
