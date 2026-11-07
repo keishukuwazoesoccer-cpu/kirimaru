@@ -411,7 +411,7 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
         <button id="btnXlsx" class="primary">Excelに出力</button>
         <button id="btnReturnPdf">返却用PDF（○×と点数入り）</button>
         <button id="btnSlips">個票を印刷</button>
-        <label class="muted" title="同じ学年でこのテストより前に登録したテスト（最大4つ）と、得点率・観点別を比べます"><input type="checkbox" id="slipHist"> 個票に過去のテストとの比較を入れる</label>
+        <button id="btnSlipCfg" title="教科・タイトル・載せる項目・呼び方・色などを変えます。教科ごとにひな形として保存できます">🎨 個票の設定</button>
         <button id="btnCombo" title="表に返却用の解答用紙（横向きの解答用紙は上下に2枚並べてA4 1枚に縮小）、裏に個票。両面印刷で1人1枚になります">返却用＋個票（両面印刷）</button>
         <button id="btnCsvTally">採点集計システム用CSV</button>
         <button id="btnCustomXlsx">様式を指定してExcel</button>
@@ -445,6 +445,19 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
   <p class="help" id="gradeHint" style="margin:0 0 6px">解答欄（点線の枠）をクリックすると、○・×・部分点を選べます。点線は未採点の欄です。</p>
   <canvas id="pageDlgCanvas" class="grade"></canvas>
   <div id="markPop" hidden></div>
+</dialog>
+
+<dialog id="slipDlg" style="width:min(1100px,95vw)">
+  <h3 style="margin-top:0">🎨 個票の設定 <span class="muted" style="font-size:13px;font-weight:normal">このテストの個票に使います。次に作るテストにも引き継がれます</span></h3>
+  <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+    <div id="slipForm" style="flex:1 1 380px;min-width:300px;max-height:68vh;overflow:auto"></div>
+    <div style="flex:0 0 auto"><div class="muted" style="font-size:12px;margin-bottom:4px">プレビュー（1人目の生徒）</div>
+      <div style="width:397px;height:560px;overflow:hidden;border:1px solid #ccc;background:#fff"><iframe id="slipPrev" title="個票のプレビュー" style="width:794px;height:1119px;border:0;transform:scale(.5);transform-origin:0 0"></iframe></div></div>
+  </div>
+  <div class="row" style="margin-top:10px;flex-wrap:wrap">
+    <label>ひな形 <select id="slipPreset"></select></label><button id="slipPresetLoad">読み込む</button><button id="slipPresetSave">今の設定をひな形に保存</button><button id="slipPresetDel">削除</button>
+    <span class="spacer"></span><button id="slipReset">初期設定に戻す</button><button id="slipClose" class="primary">閉じる</button>
+  </div>
 </dialog>
 
 <dialog id="settingsDlg">
@@ -593,7 +606,7 @@ const DB = {
 };
 
 function newState() {
-  return { id: uid(), version: 1, name: '無題のテスト', pagesPerStudent: 1, pages: [], students: [], regions: [], scores: {}, pad: 1 };
+  return { id: uid(), version: 1, name: '無題のテスト', subject: localStorage.getItem('lastSubject') || '', pagesPerStudent: 1, pages: [], students: [], regions: [], scores: {}, pad: 1 };
 }
 let S = newState();
 let saveTimer = null;
@@ -3651,14 +3664,16 @@ async function aiGradeQuestion(q, client, onProgress, readOnly = false) {
     content.push({
       type: 'text',
       text: rubric
-        ? `上の${chunk.length}枚は、数学のテストの同じ解答欄「${q.label}」（${q.max}点満点）を生徒ごとに切り抜いた手書き答案です。\n` +
+        ? `上の${chunk.length}枚は、${subjTest()}の同じ解答欄「${q.label}」（${q.max}点満点）を生徒ごとに切り抜いた手書き答案です。\n` +
           (q.answer ? `模範解答：${q.answer}\n` : '') +
           `採点基準：\n${rubric}\n\n` +
           `各答案について、書かれている内容を短く文字に起こし(read)、採点基準に従って点数(score：0〜${q.max}、0.5点刻みまで)と、その理由を一言(reason)で答えてください。空欄は read を「(空欄)」、score を 0 にしてください。判読できない部分がある場合は reason にそう書いてください。`
         : !readOnly && q.answer
-        ? `上の${chunk.length}枚は、数学のテストの同じ解答欄「${q.label}」を生徒ごとに切り抜いた手書き答案です。正答は「${q.answer}」です。\n` +
+        ? `上の${chunk.length}枚は、${subjTest()}の同じ解答欄「${q.label}」を生徒ごとに切り抜いた手書き答案です。正答は「${q.answer}」です。\n` +
           `各答案について、書かれている最終的な答えをそのまま文字に起こし(read)、正答と一致するかを判定してください(verdict)。\n` +
-          `- 数学的に同じ値・式なら correct（例: 1/2 と 0.5、x=3 と 3、約分前後の分数で値が同じ）。\n` +
+          (!S.subject || ['数学', '理科'].includes(S.subject)
+            ? `- 数学的に同じ値・式なら correct（例: 1/2 と 0.5、x=3 と 3、約分前後の分数で値が同じ）。\n`
+            : `- 意味が同じなら correct。ただし漢字の書き取り・英単語のつづりなど、書き方そのものが問われている問題では、字や つづりの違いは incorrect。\n`) +
           `- 明らかに違う、または空欄なら incorrect（空欄の read は「(空欄)」）。\n` +
           `- 字が判読しにくい、途中式だけで答えが不明確、表記ルール（単位・約分・有理化など）次第で判断が分かれる場合は unsure。迷ったら unsure にしてください。`
         : `上の${chunk.length}枚は、テストの同じ解答欄「${q.label}」を生徒ごとに切り抜いた手書き答案です。正答は登録されていないので、各答案の最終的な答えを文字に起こし(read)、verdict はすべて unsure にしてください。空欄の read は「(空欄)」。`,
@@ -3984,7 +3999,7 @@ async function aiCall(client, params) {
 function studentBrief(st, all, hist) {
   const qs = questions(), ks = usedKanten(), t = studentTotals(st);
   const lines = [`合計 ${t.total}/${maxTotal()}点（全体の平均 ${avgOf(all, (x) => studentTotals(x).total).toFixed(1)}点）`];
-  if (ks.length) lines.push('観点別：' + ks.map((k) => `${k.name} ${t.kanten[k.key]}/${kMaxOf(k.key)}（平均${avgOf(all, (x) => studentTotals(x).kanten[k.key]).toFixed(1)}）`).join('、'));
+  if (ks.length) lines.push('観点別：' + ks.map((k) => `${kName(k)} ${t.kanten[k.key]}/${kMaxOf(k.key)}（平均${avgOf(all, (x) => studentTotals(x).kanten[k.key]).toFixed(1)}）`).join('、'));
   lines.push('問題ごと：' + qs.map((q) => {
     const sc = getScore(st.id, q.id), v = sc?.s ?? 0;
     const r = q.max ? pct(all.filter((x) => (getScore(x.id, q.id)?.s || 0) >= q.max).length, all.length) : 0;
@@ -4018,7 +4033,7 @@ $('#btnAiComment').onclick = async () => {
     for (let i = 0; i < targets.length; i += CHUNK) {
       const chunk = targets.slice(i, i + CHUNK);
       busy('AIがコメントを書いています…', `${Math.min(i + CHUNK, targets.length)} / ${targets.length}人`);
-      const text = `テスト「${S.name || 'テスト'}」（満点${maxTotal()}点、受験者${all.length}人）の結果です。生徒に返す個人成績票の「先生から」の欄に書くコメントの下書きを、生徒ごとに作ってください。\n\n` +
+      const text = `${S.subject && S.subject !== 'その他' ? `${S.subject}の` : ''}テスト「${S.name || 'テスト'}」（満点${maxTotal()}点、受験者${all.length}人）の結果です。生徒に返す個人成績票の「先生から」の欄に書くコメントの下書きを、生徒ごとに作ってください。\n\n` +
         `書き方：\n- 生徒本人に向けて、です・ます調で、${len}字くらい。\n- 良かったところを1つ具体的に（できている問題・観点・前回からの伸びなど）。\n- 次に見直すとよい問題を1〜2つ、問題番号を挙げて、何に気をつけるとよいか具体的に（本人の答えがあれば、そのつまずきに合わせて）。\n` +
         `- 点数そのものの良し悪しや、他の生徒・平均と比べて下だという書き方はしない。前向きに。\n- 前回より下がっていても責めない。\n- 名前や呼びかけ（「〇〇さん」）は書かない。\n\n` +
         chunk.map((st, j) => `【生徒 id=${j}】\n${studentBrief(st, all, hist)}`).join('\n\n');
@@ -4254,12 +4269,29 @@ function histBlock(rows, ks) {
     <div class="two"><div style="flex:1.6"><table><tr><th>テスト</th><th>得点</th><th>得点率</th><th>平均</th>${ks.map((k) => `<th>${kbHead(k.key)}</th>`).join('')}</tr>${tr}</table></div><div style="flex:1">${histChart(rows)}</div></div>`;
 }
 const kbHead = (key) => { const i = KANTEN.findIndex((k) => k.key === key); return i < 0 ? esc(key) : `<span class="kb k${i}">${key}</span>`; };
-$('#slipHist').checked = localStorage.getItem('slipHist') !== '0';
-$('#slipHist').onchange = (e) => localStorage.setItem('slipHist', e.target.checked ? '1' : '0');
-const slipHistData = async () => ($('#slipHist').checked ? testHistory() : null);
+
+// ───── 個票の設定（教科に合わせて、タイトル・載せる項目・呼び方・色を変えられる） ─────
+const SUBJECTS = ['国語', '社会', '数学', '理科', '英語', '音楽', '美術', '保健体育', '技術・家庭', '外国語活動', 'その他'];
+const SLIP_DEFAULT = {
+  title: '個人成績票', sub: '', color: '#2457c5',
+  stats: { avg: true, med: true, hi: true, n: true },
+  kanten: true, dai: true, hist: localStorage.getItem('slipHist') !== '0', qgrid: true, qrate: true, qavg: true, comment: true,
+  daiWord: '大問', kname: { 知: '', 思: '', 主: '' },
+  advice: '正答率が高いのに×の問題から見直しましょう。',
+  cmHead: '先生から', cmSize: 'm',
+};
+let slipLast = null; // 最後に使った設定（新しいテストの初期値）
+function slipCfg(c = S.slip || slipLast || {}) {
+  return { ...SLIP_DEFAULT, ...c, stats: { ...SLIP_DEFAULT.stats, ...(c.stats || {}) }, kname: { ...SLIP_DEFAULT.kname, ...(c.kname || {}) } };
+}
+const kName = (k, cfg = slipCfg()) => String(cfg.kname?.[k.key] || '').trim() || k.name;
+// AIに伝える「◯◯のテスト」
+const subjTest = () => (S.subject && S.subject !== 'その他' ? `${S.subject}のテスト` : 'テスト');
+const slipHistData = async () => (slipCfg().hist ? testHistory() : null);
 
 // 生徒ごとの個票（<section class="page slip">）を作る
 function slipSections(sts, hist = null) {
+  const cfg = slipCfg();
   const qs = questions(), ks = usedKanten(), ds = daiList();
   const mt = maxTotal();
   const avgT = avgOf(sts, (st) => studentTotals(st).total);
@@ -4270,28 +4302,123 @@ function slipSections(sts, hist = null) {
   // 観点の目印（白黒印刷でも区別できるよう、塗り・枠・点線で形を変える）
   const kIdx = (key) => KANTEN.findIndex((k) => k.key === key);
   const kb = (key) => (kIdx(key) < 0 ? '' : `<span class="kb k${kIdx(key)}">${key}</span>`);
-  const kLegend = ks.length ? `<div class="kl">${ks.map((k) => `${kb(k.key)}${k.name}`).join('　')}</div>` : '';
+  const kLegend = ks.length ? `<div class="kl">${ks.map((k) => `${kb(k.key)}${esc(kName(k, cfg))}`).join('　')}</div>` : '';
   // 問題ごとの正答率（満点だった人の割合。④の得点一覧と同じ計算）
   const rate = new Map(qs.map((q) => [q.id, q.max ? pct(sts.filter((x) => (getScore(x.id, q.id)?.s || 0) >= q.max).length, sts.length) : null]));
   const qAvg = new Map(qs.map((q) => [q.id, avgOf(sts, (x) => getScore(x.id, q.id)?.s || 0)]));
   // 観点別・大問別の平均と中央値は全員共通なので先に計算しておく
   const kSt = new Map(ks.map((k) => [k.key, [avgOf(sts, (x) => studentTotals(x).kanten[k.key]), medOf(sts, (x) => studentTotals(x).kanten[k.key])]]));
   const dSt = new Map(ds.map((d) => [d, [avgOf(sts, (x) => studentTotals(x).dai[d] || 0), medOf(sts, (x) => studentTotals(x).dai[d] || 0)]]));
+  // 大問の呼び方：「Part」→ Part1、「第◯問」→ 第1問（◯の所に番号）
+  const dWord = String(cfg.daiWord || '').trim() || '大問';
+  const dLab = (d) => esc(dWord.includes('◯') ? dWord.replace('◯', d) : dWord + d);
+  const showMed = cfg.stats.med, dw = esc(dWord.includes('◯') ? '大問' : dWord);
+  const stCols = [cfg.stats.avg && ['平均', avgT.toFixed(1)], cfg.stats.med && ['中央値', fmt1(medT)], cfg.stats.hi && ['最高点', hiT], cfg.stats.n && ['受験者', `${sts.length}人`]].filter(Boolean);
+  const subj = S.subject && S.subject !== 'その他' && !String(S.name || '').includes(S.subject) ? `${esc(S.subject)}　` : '';
+  const notes = [cfg.qrate && `「正答率」は${sts.length}人のうち満点だった人の割合`, cfg.qavg && '「平均」はその問題の平均点'].filter(Boolean);
+  const note = (notes.length ? `各問題の下の${notes.join('、')}です。` : '') + esc(cfg.advice || '');
+  const cmH = { s: 40, m: 60, l: 110 }[cfg.cmSize] || 60;
   return sts.map((st) => {
     const t = studentTotals(st);
-    const kRows = ks.map((k) => { const m = kMaxOf(k.key), [a, md] = kSt.get(k.key); return `<tr><td class="l">${kb(k.key)}${k.name}</td><td><b>${t.kanten[k.key]}</b> / ${m}</td><td>${pct(t.kanten[k.key], m)}%</td><td>${a.toFixed(1)}</td><td>${fmt1(md)}</td></tr>`; }).join('');
-    const dRows = ds.map((d) => `<tr><td class="l">大問${esc(d)}</td><td><b>${t.dai[d] || 0}</b> / ${daiMax(d)}</td><td>${dSt.get(d)[0].toFixed(1)}</td><td>${fmt1(dSt.get(d)[1])}</td></tr>`).join('');
-    const cells = qs.map((q) => { const sc = getScore(st.id, q.id); const r = rate.get(q.id); return `<div class="qc"><div class="ql">${esc(q.label)}${kb(q.kanten)}</div><div class="qm">${mk(q, sc)}</div><div class="qs">${sc?.s ?? '-'}/${q.max}</div><div class="qr">${r == null ? '' : `正答率${r}%`}</div><div class="qa">平均${fmt1(qAvg.get(q.id))}</div></div>`; }).join('');
-    return `<section class="page slip"><div class="in"><h1>${esc(S.name)}　個人成績票</h1>
+    const kRows = ks.map((k) => { const m = kMaxOf(k.key), [a, md] = kSt.get(k.key); return `<tr><td class="l">${kb(k.key)}${esc(kName(k, cfg))}</td><td><b>${t.kanten[k.key]}</b> / ${m}</td><td>${pct(t.kanten[k.key], m)}%</td><td>${a.toFixed(1)}</td>${showMed ? `<td>${fmt1(md)}</td>` : ''}</tr>`; }).join('');
+    const dRows = ds.map((d) => `<tr><td class="l">${dLab(d)}</td><td><b>${t.dai[d] || 0}</b> / ${daiMax(d)}</td><td>${dSt.get(d)[0].toFixed(1)}</td>${showMed ? `<td>${fmt1(dSt.get(d)[1])}</td>` : ''}</tr>`).join('');
+    const cells = qs.map((q) => { const sc = getScore(st.id, q.id); const r = rate.get(q.id); return `<div class="qc"><div class="ql">${esc(q.label)}${kb(q.kanten)}</div><div class="qm">${mk(q, sc)}</div><div class="qs">${sc?.s ?? '-'}/${q.max}</div>${cfg.qrate ? `<div class="qr">${r == null ? '' : `正答率${r}%`}</div>` : ''}${cfg.qavg ? `<div class="qa">平均${fmt1(qAvg.get(q.id))}</div>` : ''}</div>`; }).join('');
+    const kT = cfg.kanten && ks.length ? `<div><h2>観点別</h2><table><tr><th>観点</th><th>得点</th><th>得点率</th><th>平均</th>${showMed ? '<th>中央値</th>' : ''}</tr>${kRows}</table></div>` : '';
+    const dT = cfg.dai && ds.length ? `<div><h2>${dw}別</h2><table><tr><th>${dw}</th><th>得点</th><th>平均</th>${showMed ? '<th>中央値</th>' : ''}</tr>${dRows}</table></div>` : '';
+    return `<section class="page slip" style="--ac:${esc(cfg.color || '#2457c5')}"><div class="in"><h1>${subj}${esc(S.name)}　${esc(cfg.title || '')}</h1>
+      ${cfg.sub ? `<p class="subt">${esc(cfg.sub)}</p>` : ''}
       <p class="who">${esc(st.cls)}　${esc(st.no)}番　<b>${esc(st.name)}</b></p>
-      <div class="tot"><div class="sc">合計 <b>${t.total}</b> / ${mt}点</div><table class="st"><tr><th>平均</th><th>中央値</th><th>最高点</th><th>受験者</th></tr><tr><td>${avgT.toFixed(1)}</td><td>${fmt1(medT)}</td><td>${hiT}</td><td>${sts.length}人</td></tr></table></div>
-      <div class="two">${ks.length ? `<div><h2>観点別</h2><table><tr><th>観点</th><th>得点</th><th>得点率</th><th>平均</th><th>中央値</th></tr>${kRows}</table></div>` : ''}
-      ${ds.length ? `<div><h2>大問別</h2><table><tr><th>大問</th><th>得点</th><th>平均</th><th>中央値</th></tr>${dRows}</table></div>` : ''}</div>
-      ${histBlock(historyOf(hist, st), ks)}
-      <h2>問題ごとの結果</h2>${kLegend}<p class="note">各問題の下の「正答率」は${sts.length}人のうち満点だった人の割合、「平均」はその問題の平均点です。正答率が高いのに×の問題から見直しましょう。</p><div class="qg">${cells}</div>
-      <h2>先生から</h2><div class="cm">${esc(S.comments?.[st.id] || '')}</div></div></section>`;
+      <div class="tot"><div class="sc">合計 <b>${t.total}</b> / ${mt}点</div>${stCols.length ? `<table class="st"><tr>${stCols.map((c) => `<th>${c[0]}</th>`).join('')}</tr><tr>${stCols.map((c) => `<td>${c[1]}</td>`).join('')}</tr></table>` : ''}</div>
+      ${kT || dT ? `<div class="two">${kT}${dT}</div>` : ''}
+      ${cfg.hist ? histBlock(historyOf(hist, st), ks) : ''}
+      ${cfg.qgrid ? `<h2>問題ごとの結果</h2>${kLegend}${note ? `<p class="note">${note}</p>` : ''}<div class="qg">${cells}</div>` : ''}
+      ${cfg.comment ? `<h2>${esc(cfg.cmHead || '')}</h2><div class="cm" style="min-height:${cmH}px">${esc(S.comments?.[st.id] || '')}</div>` : ''}</div></section>`;
   });
 }
+
+// ───── 個票の設定画面 ─────
+const SLIP_CHECKS = [['stats.avg', '平均'], ['stats.med', '中央値'], ['stats.hi', '最高点'], ['stats.n', '受験者数'], ['kanten', '観点別の表'], ['dai', '大問別の表'], ['hist', '過去のテストとの比較'], ['qgrid', '問題ごとの結果'], ['qrate', '問題ごとの正答率'], ['qavg', '問題ごとの平均点'], ['comment', 'コメント欄']];
+const getPath = (o, k) => k.split('.').reduce((a, x) => a?.[x], o);
+function setPath(o, k, v) { const ks = k.split('.'); let a = o; for (const x of ks.slice(0, -1)) a = a[x] ??= {}; a[ks[ks.length - 1]] = v; }
+let slipPrevHist = null, slipPrevTimer = null;
+function renderSlipForm() {
+  const c = slipCfg();
+  const txt = (k, label, ph = '', w = 260) => `<p><label>${label}<br><input data-k="${k}" value="${esc(getPath(c, k) ?? '')}" placeholder="${esc(ph)}" style="width:${w}px"></label></p>`;
+  $('#slipForm').innerHTML = `
+    <p><label>教科<br><select id="slipSubject"><option value="">（未設定）</option>${SUBJECTS.map((x) => `<option${S.subject === x ? ' selected' : ''}>${x}</option>`).join('')}</select></label>
+      <span class="muted" style="font-size:12px">AI採点・コメントの下書きにも使います</span></p>
+    ${txt('title', 'タイトル（テスト名のあとに付く）', '個人成績票')}
+    ${txt('sub', 'サブタイトル（任意）', '例：2学期 期末テスト／1年')}
+    <p><label>テーマの色 <input type="color" data-k="color" value="${esc(c.color)}"></label></p>
+    <p><b>載せる項目</b><br>${SLIP_CHECKS.map(([k, l]) => `<label style="display:inline-block;margin:2px 10px 2px 0"><input type="checkbox" data-k="${k}"${getPath(c, k) ? ' checked' : ''}> ${l}</label>`).join('')}</p>
+    <p><b>呼び方</b></p>
+    ${txt('daiWord', '「大問」の呼び方（◯の所に番号が入ります）', '大問（例：Part、第◯問）', 200)}
+    ${KANTEN.map((k) => txt(`kname.${k.key}`, `観点「${k.name}」の表示名`, k.name, 260)).join('')}
+    <p><label>問題ごとの結果の下に書く一言<br><textarea data-k="advice" rows="2" style="width:100%;box-sizing:border-box">${esc(c.advice)}</textarea></label></p>
+    ${txt('cmHead', 'コメント欄の見出し', '先生から', 200)}
+    <p><label>コメント欄の大きさ <select data-k="cmSize">${[['s', '小'], ['m', '中'], ['l', '大']].map(([v, l]) => `<option value="${v}"${c.cmSize === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label></p>`;
+}
+function slipChanged(e) {
+  const el = e.target;
+  if (el.id === 'slipSubject') { S.subject = el.value; localStorage.setItem('lastSubject', el.value); save(); slipPreview(); return; }
+  const k = el.dataset.k; if (!k) return;
+  const c = slipCfg();
+  setPath(c, k, el.type === 'checkbox' ? el.checked : el.value);
+  S.slip = c; slipLast = c; DB.put('kv', 'slipLast', c);
+  save(); slipPreview();
+}
+function slipPreview() {
+  clearTimeout(slipPrevTimer);
+  slipPrevTimer = setTimeout(() => {
+    const sts = viewStudents();
+    if (!sts.length || !questions().length) { $('#slipPrev').srcdoc = '<p style="font:16px sans-serif;padding:20px">答案と問題の枠を設定すると、ここに個票が表示されます。</p>'; return; }
+    // 統計は表示中の生徒全員で計算し、1人目の個票だけ見せる
+    $('#slipPrev').srcdoc = printDoc('個票', slipSections(sts, slipPrevHist)[0]);
+  }, 200);
+}
+async function renderSlipPresets() {
+  const ps = (await DB.get('kv', 'slipPresets')) || [];
+  $('#slipPreset').innerHTML = ps.length ? ps.map((p, i) => `<option value="${i}">${esc(p.name)}</option>`).join('') : '<option value="">（まだありません）</option>';
+  return ps;
+}
+$('#btnSlipCfg').onclick = async () => {
+  renderSlipForm(); await renderSlipPresets();
+  $('#slipDlg').showModal();
+  slipPrevHist = null; slipPreview();
+  slipPrevHist = await slipHistData().catch(() => null); slipPreview();
+};
+$('#slipForm').addEventListener('input', slipChanged);
+$('#slipForm').addEventListener('change', slipChanged);
+$('#slipClose').onclick = () => $('#slipDlg').close();
+$('#slipReset').onclick = () => {
+  if (!confirm('個票の設定を初期設定に戻しますか？（教科はそのまま）')) return;
+  S.slip = slipCfg({}); slipLast = S.slip; DB.put('kv', 'slipLast', S.slip); save();
+  renderSlipForm(); slipPreview();
+};
+$('#slipPresetSave').onclick = async () => {
+  const name = prompt('ひな形の名前（例：理科、英語・Part表記）', S.subject || '');
+  if (!name?.trim()) return;
+  const ps = await renderSlipPresets();
+  const i = ps.findIndex((p) => p.name === name.trim());
+  if (i >= 0 && !confirm(`「${name.trim()}」を上書きしますか？`)) return;
+  const item = { name: name.trim(), subject: S.subject || '', cfg: slipCfg() };
+  if (i >= 0) ps[i] = item; else ps.push(item);
+  await DB.put('kv', 'slipPresets', ps); await renderSlipPresets();
+  $('#slipPreset').value = String(i >= 0 ? i : ps.length - 1);
+  toast(`ひな形「${item.name}」を保存しました`);
+};
+$('#slipPresetLoad').onclick = async () => {
+  const ps = await renderSlipPresets(); const p = ps[+$('#slipPreset').value];
+  if (!p) return toast('ひな形がありません。「今の設定をひな形に保存」で作れます');
+  S.slip = slipCfg(p.cfg); if (p.subject) { S.subject = p.subject; localStorage.setItem('lastSubject', p.subject); }
+  slipLast = S.slip; DB.put('kv', 'slipLast', S.slip); save();
+  renderSlipForm(); slipPreview(); toast(`ひな形「${p.name}」を読み込みました`);
+};
+$('#slipPresetDel').onclick = async () => {
+  const ps = await renderSlipPresets(); const i = +$('#slipPreset').value; const p = ps[i];
+  if (!p || !confirm(`ひな形「${p.name}」を削除しますか？`)) return;
+  ps.splice(i, 1); await DB.put('kv', 'slipPresets', ps); await renderSlipPresets();
+};
 // 印刷用のページ。1ページ＝A4 1枚（用紙の余白は0にして、ページの中に余白をとる。
 // ブラウザでもMac版でも同じ大きさになるように、幅・高さはmmで固定）
 function printDoc(title, body) {
@@ -4304,10 +4431,10 @@ function printDoc(title, body) {
     .front{padding:5mm;display:flex;align-items:center;justify-content:center}
     .front img{max-width:100%;max-height:100%;display:block}
     .two{display:flex;gap:12px;align-items:flex-start} .two>div{flex:1;min-width:0}
-    h1{font-size:18px;margin:0 0 6px} h2{font-size:14px;margin:12px 0 4px;border-left:4px solid #2457c5;padding-left:6px}
-    .who{font-size:15px;margin:0 0 6px} .tot{font-size:16px;padding:8px 10px;background:#f1f4fb;border-radius:6px} .tot b{font-size:22px} .tot{display:flex;align-items:center;gap:14px} .tot .sc{white-space:nowrap} .tot .st{width:auto;flex:1;font-size:12px;background:#fff} .tot .st td{font-size:14px;font-weight:600}
+    h1{font-size:18px;margin:0 0 6px} h2{font-size:14px;margin:12px 0 4px;border-left:4px solid var(--ac,#2457c5);padding-left:6px} .subt{font-size:13px;color:#444;margin:-2px 0 6px}
+    .who{font-size:15px;margin:0 0 6px} .tot{font-size:16px;padding:8px 10px;background:#f1f4fb;background:color-mix(in srgb,var(--ac,#2457c5) 8%,#fff);border-radius:6px} .tot b{font-size:22px} .tot{display:flex;align-items:center;gap:14px} .tot .sc{white-space:nowrap} .tot .st{width:auto;flex:1;font-size:12px;background:#fff} .tot .st td{font-size:14px;font-weight:600}
     table{border-collapse:collapse;width:100%;font-size:13px} td,th{border:1px solid #aaa;padding:3px 6px;text-align:center} th{background:#f3f3f3} td.l{text-align:left}
-    .qg{display:flex;flex-wrap:wrap;gap:4px} .qc{border:1px solid #aaa;width:62px;text-align:center;font-size:11px} .ql{background:#f3f3f3} .qm{font-size:18px;color:#c62828;line-height:1.2} .qs{color:#555} .qr{border-top:1px dotted #bbb;font-size:10px;color:#2457c5} .qa{font-size:10px;color:#555}
+    .qg{display:flex;flex-wrap:wrap;gap:4px} .qc{border:1px solid #aaa;width:62px;text-align:center;font-size:11px} .ql{background:#f3f3f3} .qm{font-size:18px;color:#c62828;line-height:1.2} .qs{color:#555} .qr{border-top:1px dotted #bbb;font-size:10px;color:var(--ac,#2457c5)} .qa{font-size:10px;color:#555}
     .kb{display:inline-block;font-size:9px;line-height:1;padding:1px 2px;margin-left:3px;border-radius:3px;vertical-align:1px;border:1px solid #111}
     .kb.k0{background:#111;color:#fff} .kb.k1{background:#fff;color:#111} .kb.k2{background:#fff;color:#111;border-style:dashed} th .kb{margin:0}
     td .kb{font-size:11px;margin:0 4px 0 0} .kl{font-size:11px;margin:0 0 3px} .kl .kb{font-size:10px;margin:0 3px 0 0}
@@ -4443,6 +4570,7 @@ function renderAll() {
   // 空き容量が少ないときなどに、ブラウザが保存データを自動で消さないよう頼んでおく
   navigator.storage?.persist?.().catch(() => {});
   TESTS.list = (await DB.get('kv', 'tests')) || [];
+  slipLast = (await DB.get('kv', 'slipLast')) || null;
   GRADE.extra = (await DB.get('kv', 'grades')) || [];
   GRADE.cur = (await DB.get('kv', 'gradeCur')) ?? '*';
   let restored = false;
