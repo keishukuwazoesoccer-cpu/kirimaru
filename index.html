@@ -343,18 +343,15 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
           <b id="gqTitle"></b>
           <span class="muted" id="gqInfo"></span>
           <span class="spacer"></span>
-          <label class="muted">並び <select id="sortSel">
-            <option value="no">番号順</option>
-            <option value="unscored">未採点を先に</option>
-            <option value="ai">AI読み取りの順</option>
-            <option value="group">同じ答えをまとめて採点</option>
-            <option value="diff">AIと判定が違うものを先に</option>
-          </select></label>
+          <span class="muted">答案は名簿順</span>
+          <label>教科 <select id="gradeSubject"></select></label>
+          <label id="kokugoTypeLabel" hidden>国語の問題形式 <select id="kokugoType"><option value="free">自由記述（AI読み取り＋先生の採点）</option><option value="short">短答（AI読み取り＋正答照合）</option></select></label>
           <label class="muted">大きさ <input type="range" id="tileSize" min="140" max="600" value="240"></label>
         </div>
         <div class="row" style="margin-top:6px">
           <button id="btnAiQ" class="primary">🤖 この問題をAI採点</button>
           <button id="btnAiAll">🤖 全問AI採点</button>
+          <span id="aiPolicyHelp" class="help" style="flex-basis:100%"></span>
           <button id="btnAllO">未採点を全部○</button>
           <button id="btnAllX">未採点を全部×</button>
           <button id="btnKeyShow" title="この問題の模範解答を、答案の上に表示します">📘 模範解答</button>
@@ -3138,38 +3135,21 @@ async function renderGrade() {
   renderKeyPanel(q);
   $('#gqInfo').textContent = `配点 ${q.max}点・観点 ${q.kanten}` + (q.answer ? `・正答「${q.answer}」` : '・正答未登録');
   const sts = S.students.map((st, i) => ({ st, i }));
-  const sort = $('#sortSel').value;
-  if (sort === 'unscored') sts.sort((a, b) => (getScore(a.st.id, q.id)?.s != null) - (getScore(b.st.id, q.id)?.s != null) || a.i - b.i);
-  if (sort === 'ai') sts.sort((a, b) => (getScore(a.st.id, q.id)?.ai?.read || '￿').localeCompare(getScore(b.st.id, q.id)?.ai?.read || '￿', 'ja') || a.i - b.i);
-  if (sort === 'diff') sts.sort((a, b) => disagree(q, getScore(b.st.id, q.id)) - disagree(q, getScore(a.st.id, q.id)) || a.i - b.i);
-  // 同じ答えをまとめて採点：AIの読み取り結果でグループにする
+  // 答案画像は常に登録名簿の順序。点数・AI結果では並べ替えない。
   grade.groups = null;
-  let heads = {};
-  if (sort === 'group') {
-    const gm = new Map();
-    for (const x of sts) {
-      const a = getScore(x.st.id, q.id)?.ai;
-      const key = a ? normAns(a.read) || '(空欄)' : '\u0000';
-      if (!gm.has(key)) gm.set(key, { key, label: a ? a.read || '(空欄)' : '', items: [] });
-      gm.get(key).items.push(x);
-    }
-    const gs = [...gm.values()].sort((a, b) => (a.key === '\u0000') - (b.key === '\u0000') || b.items.length - a.items.length);
-    grade.groups = gs.map((g) => g.items.map((x) => x.st.id));
-    sts.length = 0; let k = 0;
-    gs.forEach((g, gi) => { heads[k] = { g, gi }; k += g.items.length; sts.push(...g.items); });
-  }
+  $('#gradeSubject').innerHTML = '<option value="">未設定</option>' + SUBJECTS.map((x) => `<option${S.subject === x ? ' selected' : ''}>${esc(x)}</option>`).join('');
+  $('#kokugoTypeLabel').hidden = S.subject !== '国語';
+  $('#kokugoType').value = q.kokugoType === 'short' ? 'short' : 'free';
+  const mode = questionAIMode(q);
+  $('#btnAiQ').textContent = mode === 'read' ? '🤖 この問題をAIで読み取る' : mode === 'match' ? '🤖 この問題を読み取り・正答照合' : '🤖 この問題をAI採点';
+  $('#btnAiAll').textContent = S.subject === '国語' ? '🤖 全問を読み取り・短答照合' : '🤖 全問AI採点';
+  $('#aiPolicyHelp').textContent = mode === 'read' ? '自由記述はAIが文字を読み取り、先生が採点します。正答・採点基準・模範解答はAIに送りません。' : mode === 'match' ? '短答はAIの読み取りを登録正答と照合します。意味による評価や部分点は先生が採点してください。' : 'AIの採点結果は必ず先生が確認してください。';
   grade.order = sts.map((x) => x.st);
   grade.focus = clamp(grade.focus, 0, grade.order.length - 1);
   const tileHtml = (st, k) => `<div class="tile" data-k="${k}" data-sid="${st.id}">
       <img alt=""><div class="mk"></div><div class="ai"></div>
       <div class="ft"><span>${esc(st.no)} ${esc(st.name)}</span><span><span class="score"></span> <button class="zoom ext" title="この生徒だけ枠を広げる（はみ出して書いたとき）">⤢</button><button class="zoom" title="答案全体を見る">🔍</button></span></div></div>`;
-  const headHtml = ({ g, gi }) => g.key === '\u0000'
-    ? `<div class="ghead" data-g="${gi}"><b>AIの読み取りがない答案（${g.items.length}人）</b><button data-gs="read">🤖 AIで答えを読み取る（点数はつけない）</button><span class="help">読み取ると、同じ答えどうしがまとまります</span></div>`
-    : `<div class="ghead" data-g="${gi}"><b>「${esc(g.label)}」</b><span class="muted">${g.items.length}人</span>
-        <button data-gs="max">全員○</button><button data-gs="0">全員×</button>
-        <input type="number" min="0" max="${q.max}" step="0.5" style="width:64px" placeholder="点"><button data-gs="input">この点にする</button>
-        <span class="muted gdone"></span></div>`;
-  grid.innerHTML = grade.order.map((st, k) => (heads[k] ? headHtml(heads[k]) : '') + tileHtml(st, k)).join('');
+  grid.innerHTML = grade.order.map((st, k) => tileHtml(st, k)).join('');
   updateGroupHeads();
   grade.order.forEach((st, k) => updateTile(k));
   await ensureCrops([q], (i, n) => { $('#gqInfo').dataset.loading = `${i}/${n}`; });
@@ -3291,23 +3271,6 @@ function updateGroupHeads() {
     el.textContent = `採点済み ${sc.length}/${ids.length}` + (sc.length ? `（${[...new Set(sc)].join('・')}点）` : '');
   });
 }
-$('#grid').addEventListener('click', async (e) => {
-  const b = e.target.closest('.ghead button'); if (!b) return;
-  const q = curQ(); const h = b.closest('.ghead'); const ids = grade.groups?.[+h.dataset.g]; if (!q || !ids) return;
-  if (b.dataset.gs === 'read') {
-    let client; try { client = await aiClient(); } catch (err) { toast(err.message); return; }
-    try { await aiGradeQuestion(q, client, (d, n) => busy('AIで答えを読み取っています…', `${d}/${n}人`), true); }
-    catch (err) { alert('AIの読み取りでエラーが発生しました：\n' + err.message); }
-    finally { busy(null); }
-    renderGrade(); return;
-  }
-  let v = b.dataset.gs === 'max' ? q.max : b.dataset.gs === '0' ? 0 : parseFloat(h.querySelector('input').value);
-  if (isNaN(v)) return toast('点数を入れてください');
-  v = clamp(v, 0, q.max);
-  for (const id of ids) setScore(id, q.id, v);
-  grade.order.forEach((_, k) => updateTile(k)); renderQList(); updateGroupHeads();
-  toast(`${ids.length}人を${v}点にしました`);
-});
 function updateTile(k) {
   const q = curQ(); const st = grade.order[k]; if (!q || !st) return;
   const t = document.querySelector(`#grid .tile[data-k="${k}"]`); if (!t) return;
@@ -3319,7 +3282,7 @@ function updateTile(k) {
   const ai = sc?.ai;
   t.querySelector('.ai').innerHTML = ai ? (ai.verdict === 'scored'
     ? `<b>AI</b> ${ai.score}点：${esc(ai.reason || '')}` 
-    : `<b>AI</b> 「${esc(ai.read)}」 ${{ correct: '正解', incorrect: '不正解', unsure: '要確認' }[ai.verdict] || ''}`) : '';
+    : `<b>AI</b> 「${esc(ai.read)}」 ${{ correct: '正解', incorrect: '不正解', unsure: '要確認', read: ai.uncertain ? '読み取り要確認・先生が採点' : '読み取り済み' }[ai.verdict] || ''}`) : '';
   t.querySelector('.ai').title = ai ? `読み取り：${ai.read}${ai.reason ? '\n理由：' + ai.reason : ''}` : '';
   const dis = disagree(q, sc);
   t.classList.toggle('diff', dis);
@@ -3375,7 +3338,8 @@ function bulk(val) {
 }
 $('#btnAllO').onclick = () => bulk(curQ()?.max);
 $('#btnAllX').onclick = () => bulk(0);
-$('#sortSel').onchange = () => { grade.focus = 0; renderGrade(); };
+$('#gradeSubject').onchange = (e) => { S.subject = e.target.value; localStorage.setItem('lastSubject', S.subject); save(); renderGrade(); };
+$('#kokugoType').onchange = (e) => { const q = curQ(); if (!q) return; q.kokugoType = e.target.value === 'short' ? 'short' : 'free'; save(); renderGrade(); };
 $('#tileSize').oninput = (e) => $('#grid').style.setProperty('--tw', e.target.value + 'px');
 
 // 答案全体ダイアログ
@@ -3661,10 +3625,34 @@ const RUBRIC_SCHEMA = {
   required: ['results'],
   additionalProperties: false,
 };
-// readOnly：点数はつけず、答えの読み取りだけ（「同じ答えをまとめて採点」用）
+function questionAIMode(q) {
+  if (S.subject !== '国語') return 'grade';
+  return q.kokugoType === 'short' ? 'match' : 'read';
+}
+const READ_SCHEMA = {
+  type: 'object', properties: { results: { type: 'array', items: {
+    type: 'object', properties: { id: { type: 'integer' }, read: { type: 'string' }, uncertain: { type: 'boolean' } },
+    required: ['id', 'read', 'uncertain'], additionalProperties: false,
+  } } }, required: ['results'], additionalProperties: false,
+};
+// 短答は文字列を忠実に比較。漢字・送り仮名・大文字小文字等は勝手に同一視しない。
+function matchShortAnswer(q, r) {
+  if (r.uncertain !== false || !String(q.answer || '').trim()) return null;
+  const text = String(r.read || '').trim();
+  if (!text || text === '(空欄)') return 0;
+  return text === String(q.answer).trim() ? q.max : null;
+}
+// 呼び出し元の指定にかかわらず、実行直前に国語の処理制限を適用する。
 async function aiGradeQuestion(q, client, onProgress, readOnly = false) {
+  const mode = questionAIMode(q);
+  const activeTest = S;
+  const subject = S.subject;
+  readOnly = readOnly || mode !== 'grade';
   const rubric = !readOnly && String(q.rubric || '').trim();
-  const targets = S.students.filter((st) => (readOnly ? !getScore(st.id, q.id)?.ai : getScore(st.id, q.id)?.s == null));
+  const targets = S.students.filter((st) => {
+    const sc = getScore(st.id, q.id);
+    return mode === 'read' ? sc?.ai?.verdict !== 'read' : sc?.s == null;
+  });
   if (!targets.length) return 0;
   await ensureAlign(q.page);
   const model = localStorage.getItem('sg_model') || 'claude-opus-5-5';
@@ -3673,6 +3661,7 @@ async function aiGradeQuestion(q, client, onProgress, readOnly = false) {
   for (let i = 0; i < targets.length; i += CHUNK) {
     const chunk = targets.slice(i, i + CHUNK);
     onProgress?.(i, targets.length);
+    if (S !== activeTest || S.subject !== subject || questionAIMode(q) !== mode) throw new Error('テスト・教科・問題形式が変わったため中止しました。もう一度実行してください。');
     const content = [];
     // 模範解答の画像があれば最初に見せる（読み取りだけのときは使わない）
     const keyUrl = !readOnly && (await keyCrop(q));
@@ -3691,7 +3680,9 @@ async function aiGradeQuestion(q, client, onProgress, readOnly = false) {
     }
     content.push({
       type: 'text',
-      text: rubric
+      text: readOnly
+        ? `上の${chunk.length}枚の画像に書かれた文字を、訂正・補完せず忠実に文字起こししてください。各画像のid、read、判読に迷う箇所があるか(uncertain)だけを返してください。空欄はreadを「(空欄)」にしてください。正誤・点数・内容の評価は行わないでください。`
+        : rubric
         ? `上の${chunk.length}枚は、${subjTest()}の同じ解答欄「${q.label}」（${q.max}点満点）を生徒ごとに切り抜いた手書き答案です。\n` +
           (q.answer ? `模範解答：${q.answer}\n` : '') +
           `採点基準：\n${rubric}\n\n` +
@@ -3709,9 +3700,10 @@ async function aiGradeQuestion(q, client, onProgress, readOnly = false) {
     const params = {
       model,
       max_tokens: 8000,
-      output_config: { effort: rubric ? 'medium' : 'low', format: { type: 'json_schema', schema: rubric ? RUBRIC_SCHEMA : AI_SCHEMA } },
+      output_config: { effort: rubric ? 'medium' : 'low', format: { type: 'json_schema', schema: readOnly ? READ_SCHEMA : rubric ? RUBRIC_SCHEMA : AI_SCHEMA } },
       messages: [{ role: 'user', content }],
     };
+    if (S !== activeTest || S.subject !== subject || questionAIMode(q) !== mode) throw new Error('テスト・教科・問題形式が変わったため中止しました。もう一度実行してください。');
     let res;
     if (model === 'claude-haiku-5-5') {
       res = await client.messages.create(params);
@@ -3719,6 +3711,7 @@ async function aiGradeQuestion(q, client, onProgress, readOnly = false) {
       // 安全フィルタで断られた場合に別モデルへ自動で切り替える
       res = await client.beta.messages.create({ ...params, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' });
     }
+    if (S !== activeTest || S.subject !== subject || questionAIMode(q) !== mode) throw new Error('テスト・教科・問題形式が変わったため中止しました。もう一度実行してください。');
     if (res.stop_reason === 'refusal') throw new Error('AIが応答を拒否しました');
     const txt = res.content.find((b) => b.type === 'text')?.text || '{}';
     const out = JSON.parse(txt).results || [];
@@ -3726,6 +3719,15 @@ async function aiGradeQuestion(q, client, onProgress, readOnly = false) {
       const st = chunk[r.id]; if (!st) continue;
       S.scores[st.id] ??= {};
       const cur = S.scores[st.id][q.id] || {};
+      if (readOnly) {
+        // API応答に余計な採点情報があっても採用しない。既存の先生の点数は保持。
+        const read = String(r.read || '');
+        const shortScore = mode === 'match' ? matchShortAnswer(q, r) : null;
+        const next = { ...cur, ai: { read, verdict: 'read', uncertain: r.uncertain !== false } };
+        if (mode === 'match' && cur.s == null && shortScore != null) { next.s = shortScore; applied++; }
+        S.scores[st.id][q.id] = next;
+        continue;
+      }
       if (rubric) {
         const sc = clamp(Math.round((+r.score || 0) * 2) / 2, 0, q.max);
         S.scores[st.id][q.id] = { ...cur, ai: { read: r.read, verdict: 'scored', score: sc, reason: r.reason }, ...(cur.s == null ? { s: sc } : {}) };
@@ -3754,7 +3756,7 @@ async function runAI(qs) {
       applied += await aiGradeQuestion(q, client, (d, n) => busy('AI採点中…', `${q.label}（${i + 1}/${qs.length}問）　${d}/${n}人`));
     }
     busy(null);
-    toast(`AIが${applied}件を採点しました。要確認：${unsure()}件（AIの判定は必ず目で確認してください）`, 5000);
+    toast(S.subject === '国語' ? `読み取りが完了しました。短答の正答照合：${applied}件。先生の採点が必要：${unsure()}件` : `AIが${applied}件を採点しました。要確認：${unsure()}件（AIの判定は必ず目で確認してください）`, 5000);
   } catch (e) {
     busy(null);
     alert('AI採点でエラーが発生しました：\n' + (e.status ? `[${e.status}] ` : '') + e.message);
@@ -3765,6 +3767,10 @@ $('#btnAiQ').onclick = () => { const q = curQ(); if (q) runAI([q]); };
 $('#btnAiAll').onclick = () => {
   const qs = questions();
   if (!qs.length) return;
+  if (S.subject === '国語') {
+    if (confirm(`全${qs.length}問をAIで読み取ります。自由記述の点数は先生が入力します。短答は登録正答と照合し、一致しない答案は先生が確認します。`)) runAI(qs);
+    return;
+  }
   const noAns = qs.filter((q) => !q.answer).length;
   if (!confirm(`全${qs.length}問の未採点の答案をAIで採点します。` + (noAns ? `\n（正答未登録の${noAns}問は読み取りのみ）` : '') + '\nよろしいですか？')) return;
   runAI(qs);
@@ -4138,7 +4144,7 @@ function renderReport(sts) {
       <div><b>観点別の平均</b><table class="rep">${kan}</table>
         <p><b>正答率が低い問題</b><br>${low.map((x) => `${esc(x.q.label)}（${x.r}%）`).join('、')}</p></div>
     </div>
-    ${hasAi ? '' : '<p class="help">③で「🤖 AI採点」または「同じ答えをまとめて採点」で答えを読み取ると、よくある誤答も表示されます。</p>'}
+    ${hasAi ? '' : '<p class="help">③でAI採点・読み取りを実行すると、よくある誤答も表示されます。</p>'}
     <table class="rep"><tr><th>問題</th><th>正答率</th><th>平均</th><th>中央値</th><th>よくある誤答（満点でなかった答案）</th></tr>${qrows}</table>`;
 }
 
@@ -4154,7 +4160,7 @@ function renderDiffList(sts) {
 }
 $('#diffList').addEventListener('click', async (e) => {
   const b = e.target.closest('button[data-q]'); if (!b) return;
-  grade.qid = b.dataset.q; $('#sortSel').value = 'diff';
+  grade.qid = b.dataset.q;
   showView('grade');
   await new Promise((r) => setTimeout(r, 300));
   const k = grade.order.findIndex((st) => st.id === b.dataset.s);
