@@ -583,13 +583,41 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // ───────── 保存（IndexedDB） ─────────
 const DB = {
   db: null,
-  open() {
-    return new Promise((res, rej) => {
-      const r = indexedDB.open('saitengiri', 1);
-      r.onupgradeneeded = () => { r.result.createObjectStore('kv'); r.result.createObjectStore('blobs'); };
-      r.onsuccess = () => { this.db = r.result; res(); };
+  async open() {
+    let fresh = false;
+    this.db = await new Promise((res, rej) => {
+      const r = indexedDB.open('kirimaru', 1);
+      r.onupgradeneeded = (e) => { fresh = e.oldVersion === 0; r.result.createObjectStore('kv'); r.result.createObjectStore('blobs'); };
+      r.onsuccess = () => res(r.result);
       r.onerror = () => rej(r.error);
     });
+    if (fresh) await this.migrateOld().catch((e) => console.warn('旧データの引き継ぎに失敗', e));
+    // 引き継ぎ済みなのに旧名のデータベースが残っていれば消す
+    else if ((await this.get('kv', 'tests')) && (indexedDB.databases ? await indexedDB.databases() : []).some((d) => d.name === 'saitengiri')) indexedDB.deleteDatabase('saitengiri');
+  },
+  // 旧名のときに保存したデータがあれば、初回だけそのまま引き継ぐ（旧データは消さずに残す）
+  async migrateOld() {
+    const OLD = 'saitengiri';
+    const list = indexedDB.databases ? await indexedDB.databases() : [];
+    if (!list.some((d) => d.name === OLD)) return;
+    const old = await new Promise((res, rej) => { const r = indexedDB.open(OLD); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+    try {
+      for (const store of ['kv', 'blobs']) {
+        if (!old.objectStoreNames.contains(store)) continue;
+        const rows = await new Promise((res, rej) => {
+          const out = [], c = old.transaction(store).objectStore(store).openCursor();
+          c.onsuccess = () => { const cur = c.result; if (!cur) return res(out); out.push([cur.key, cur.value]); cur.continue(); };
+          c.onerror = () => rej(c.error);
+        });
+        await new Promise((res, rej) => {
+          const t = this.db.transaction(store, 'readwrite'), s = t.objectStore(store);
+          for (const [k, v] of rows) s.put(v, k);
+          t.oncomplete = res; t.onerror = () => rej(t.error);
+        });
+      }
+    } finally { old.close(); }
+    // 引き継ぎが終わったら、旧名のデータベースは消す
+    indexedDB.deleteDatabase(OLD);
   },
   tx(store, mode, fn) {
     return new Promise((res, rej) => {
