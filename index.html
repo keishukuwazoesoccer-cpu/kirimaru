@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ja">
 <head>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-FD5cZH32oXvlfN/ps8xzu1vqysifPGNabymKCcerSok=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-EecciTFL6im3FT0btk+8kOM0MlNdBre4kMKptvUHtS0=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta charset="utf-8">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -3845,7 +3845,7 @@ function renderReport(sts) {
   const bins = Array(10).fill(0);
   for (const st of sts) bins[Math.min(9, Math.floor((studentTotals(st).total / (mt || 1)) * 10))]++;
   const bmax = Math.max(1, ...bins);
-  const rng = (i) => { const lo = Math.round((mt * i) / 10), hi = i === 9 ? mt : Math.max(lo, Math.round((mt * (i + 1)) / 10) - 1); return lo === hi ? `${lo}点` : `${lo}〜${hi}点`; };
+  const rng = (i) => i === 9 ? '90%以上〜100%' : `${i * 10}%以上〜${(i + 1) * 10}%未満`;
   const hist = bins.map((c, i) => `<tr><td>${rng(i)}</td><td><span class="bar2" style="width:${(c / bmax) * 220}px"></span> ${c}人</td></tr>`).reverse().join('');
   const kan = ks.map((k) => { const v = avgOf(sts, (st) => studentTotals(st).kanten[k.key]), m = kMaxOf(k.key); return `<tr><td>${k.name}</td><td><span class="bar2" style="width:${pct(v, m) * 2.2}px"></span> ${v.toFixed(1)} / ${m}点（${pct(v, m)}%）</td></tr>`; }).join('');
   const hasAi = qs.some((q) => sts.some((st) => getScore(st.id, q.id)?.ai));
@@ -3862,7 +3862,7 @@ function renderReport(sts) {
   const low = [...qs].map((q) => ({ q, r: pct(sts.filter((st) => (getScore(st.id, q.id)?.s ?? -1) >= q.max).length, n) })).sort((a, b) => a.r - b.r).slice(0, 5);
   $('#report').innerHTML = `
     <div class="row" style="align-items:flex-start;gap:32px">
-      <div><b>合計点の分布</b>（平均 ${avgOf(sts, (st) => studentTotals(st).total).toFixed(1)}点・中央値 ${fmt1(medOf(sts, (st) => studentTotals(st).total))}点・${n}人）<table class="rep">${hist}</table></div>
+      <div><b>合計点の分布（得点率）</b>（平均 ${avgOf(sts, (st) => studentTotals(st).total).toFixed(1)}点・中央値 ${fmt1(medOf(sts, (st) => studentTotals(st).total))}点・${n}人）<table class="rep">${hist}</table></div>
       <div><b>観点別の平均</b><table class="rep">${kan}</table>
         <p><b>正答率が低い問題</b><br>${low.map((x) => `${esc(x.q.label)}（${x.r}%）`).join('、')}</p></div>
     </div>
