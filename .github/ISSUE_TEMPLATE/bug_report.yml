@@ -1,0 +1,12 @@
+name: 不具合報告（個人情報禁止）
+description: 架空データで再現できる操作だけを報告してください。
+body:
+  - type: markdown
+    attributes:
+      value: 答案・氏名・名簿・点数・APIキー・バックアップは添付しないでください。この窓口は公開されます。
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 端末・ブラウザーと架空データでの再現手順
+    validations:
+      required: true

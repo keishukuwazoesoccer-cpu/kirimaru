@@ -1,0 +1,6 @@
+{
+  "stopAI": true,
+  "stopApp": false,
+  "version": "web-2026.11.08",
+  "reason": "AI読み取りは実API・学校の利用条件の確認完了まで停止"
+}
