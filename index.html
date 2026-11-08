@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ja">
 <head>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-EecciTFL6im3FT0btk+8kOM0MlNdBre4kMKptvUHtS0=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-PxCDY7c/Nt70X2Vx0a6PNFlR5xwDT9yzkgGQNF76S1g=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta charset="utf-8">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -296,7 +296,7 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
       <div class="row" style="margin-bottom:8px">
         <label>表示する答案 <select id="setupStudent"></select></label>
         <label>ページ <select id="setupPage"></select></label>
-        <button id="btnDetect">🪄 枠を自動で提案</button>
+        <button id="btnDetectAI" class="primary">✨ AIで解答欄・番号・配点を自動入力</button><button id="btnDetect">端末内で枠を提案（AIなし）</button>
         <label class="muted" title="線の薄い答案や小さな欄が拾えないときは「敏感」、余計な候補が多いときは「控えめ」">感度 <select id="detSens"><option value="high">敏感</option><option value="mid">普通</option><option value="low">控えめ</option></select></label>
         <label class="muted" title="点線・破線で書かれた解答欄も探します"><input type="checkbox" id="detDotted"> 点線の欄も探す</label>
         <button id="btnNumMode" title="大問・小問の番号を、枠を順番にクリックしてつけます">🔢 クリックで番号付け</button>
@@ -345,8 +345,8 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
           <label class="muted">大きさ <input type="range" id="tileSize" min="140" max="600" value="240"></label>
         </div>
         <div class="row" style="margin-top:6px">
-          <button id="btnReadSelected" disabled>選択した解答欄をAIで読み取る（任意）</button>
-          <span id="aiPolicyHelp" class="help" style="flex-basis:100%">手動採点が標準です。AI採点はありません。AI読み取りは設定で明示的に有効にした場合だけ使えます。</span>
+
+          <span id="aiPolicyHelp" class="help" style="flex-basis:100%">採点は先生が行います。AIは②で氏名などを隠したPDFから、解答欄・番号・配点を設定するために使います。</span>
           <button id="btnAllO">未採点を全部○</button>
           <button id="btnAllX">未採点を全部×</button>
           <button id="btnKeyShow" title="この問題の模範解答を、答案の上に表示します">📘 模範解答</button>
@@ -451,15 +451,26 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
 </dialog>
 
 <dialog id="settingsDlg">
-<h3>AI読み取りの設定（任意・初期状態は無効）</h3><p>現在のWeb版では、実サービスとの接続確認が終わるまでAI読み取りの送信を提供元の設定で停止しています。</p>
-<p>AI採点・全ページ解析・一括送信・成績コメント生成はありません。先生が個別に選択して画像を確認した解答欄だけをAnthropic社へ送ります。利用料は利用者の負担です。</p>
-<p><label><input type="checkbox" id="enableAI"> このページを開いている間だけAI読み取りを有効にする</label></p>
-<label>APIキー（保存しません）<input id="apiKey" type="password" autocomplete="off" spellcheck="false"></label>
-<p>キーはこの画面を開いている間のメモリーにだけ保持し、再読み込み・無効化で消去します。学校で許可されたキーとデータだけを使ってください。</p>
-<div class="row"><button id="clearApiKey">無効化してキーを消去</button><button id="settingsCancel">キャンセル</button><button id="settingsSave">このページだけに適用</button></div>
+<h3>Anthropic APIキーを入力して保存</h3>
+<p>解答用紙PDFを取り込み、②のAIボタンを押して氏名などを隠すと、解答欄・大問・小問・配点の設定にAIを使えます。採点は先生が行います。API利用料は利用者の負担です。</p>
+<label>APIキー <input id="apiKey" type="password" maxlength="512" autocomplete="off" spellcheck="false" placeholder="登録・変更するときに入力"></label>
+<p id="savedKeyStatus" class="help"></p><p>このブラウザーに保存します。共有端末では利用後に削除してください。テストのバックアップには含めません。</p>
+<label>解析モデル <select id="layoutModel"><option value="claude-sonnet-5-5">Claude Sonnet 5.5</option><option value="claude-haiku-5-5">Claude Haiku 5.5</option></select></label>
+<div class="row"><button id="clearApiKey">保存したキーを削除</button><button id="settingsCancel">キャンセル</button><button id="settingsSave" class="primary">保存</button></div>
 </dialog>
-<dialog id="readConfirmDlg"><h3>送信前の画像確認</h3><p>下の画像だけを送ります。氏名・個人を特定できる記述が入っていたらキャンセルしてください。読み取った文字は採点に使わず表示するだけです。</p><div id="readPreview" class="row"></div><p><label><input id="readNoPersonal" type="checkbox"> 個人情報を含まないことと、学校の利用ルールを確認しました</label></p><button id="readCancel">キャンセル</button><button id="readSend">この画像だけを送信</button></dialog>
-
+<dialog id="layoutDlg" style="width:min(1100px,95vw);max-height:95vh;overflow:auto">
+<div class="row"><h3>AIで解答欄・番号・配点を自動入力</h3><span class="spacer"></span><button id="layoutClose">閉じる</button></div>
+<p id="layoutStatus" role="status" style="white-space:pre-wrap"></p>
+<div id="layoutMaskStep" data-layout-stage="mask">
+<h4>氏名などの部分を選択してください</h4><p>送信する先頭の生徒1人分の各ページで、氏名・学級・出席番号・学校名などをドラッグして黒く隠します。本文中に個人情報がある場合も追加で隠してください。</p>
+<div id="layoutMaskActions"><div class="row"><button id="layoutPrev">前のページ</button><select id="layoutPage"></select><button id="layoutNext">次のページ</button><button id="layoutUndo">このページの黒塗りを1つ戻す</button><span id="layoutPageInfo"></span></div>
+<label><input id="layoutNoName" type="checkbox"> このページには隠す必要のある個人情報がないことを確認しました</label></div>
+<canvas id="layoutCanvas" style="display:block;max-width:100%;max-height:66vh;width:auto;height:auto;touch-action:none;cursor:crosshair;border:1px solid #bbb"></canvas>
+<button id="layoutPrepare" class="primary">隠したPDFを作って確認へ</button></div>
+<div data-layout-stage="preview" hidden><h4>送信するPDFを確認してください</h4><p id="layoutPdfInfo"></p><p>下の画像だけからPDFを新しく作成しています。黒塗りの下に元の文字・画像・注釈を残しません。</p><div id="layoutPreviews" class="layout-images"></div><button id="layoutDownload">送信するPDFを保存して確認</button><p><label><input id="layoutConsent" type="checkbox"> 全ページの黒塗り後の画像に個人情報が残っていないこと、学校の利用規程とAnthropicへの送信を確認しました</label></p><button id="layoutBack">戻って隠す範囲を直す</button><button id="layoutSend" class="primary">このPDFをAnthropicへ送って解析</button></div>
+<div data-layout-stage="result" hidden><h4>解答欄・番号・配点の確認</h4><p>AIの読み取りには誤りがあります。枠の位置を画像で、番号と配点を表で確認・修正してください。空の配点は先生が入力します。既存の問題欄は置き換わります。採点済みのテストには反映できません。</p><p id="layoutWarnings" style="white-space:pre-wrap"></p><div style="overflow:auto"><table><thead><tr><th>ページ</th><th>大問</th><th>小問</th><th>表示名</th><th>配点</th><th>観点</th></tr></thead><tbody id="layoutRows"></tbody></table></div><div id="layoutResultImages" class="layout-images"></div><p><label><input id="layoutAccept" type="checkbox"> 枠の位置・大問・小問・配点を確認しました</label></p><button id="layoutApply" class="primary">この内容で解答欄を設定</button></div>
+<p><button id="layoutCancel">中止して閉じる</button></p></dialog>
+<style>#layoutDlg [hidden]{display:none!important}.layout-images{display:flex;gap:12px;flex-wrap:wrap;max-height:65vh;overflow:auto}.layout-images img{max-width:100%;max-height:60vh;object-fit:contain;border:1px solid #bbc8cf}.layout-images figure{margin:0;max-width:100%}#layoutRows input{max-width:140px;width:100%;min-width:60px}#layoutRows input[type=number]{width:80px}</style>
 
 <dialog id="namesDlg">
   <h3 style="margin-top:0">名簿を貼り付け</h3>
@@ -506,7 +517,7 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
     <li>大切なデータは「バックアップを保存」でときどき書き出してください。ブラウザの履歴・サイトデータを消すと、作業内容も消えます。</li>
     <li>学校に個人情報・端末の利用ルールがある場合は、それに従ってください。</li>
   </ul>
-  <h4>答案・成績データの扱い</h4><ul class="about"><li>採点・集計・PDF/Excel出力・保存は端末内で処理します。AIは初期無効です。</li><li>任意のAI読み取りだけは、先生が手動選択し、プレビューで確認した解答欄画像をAnthropic社へ送信します。元PDF・名簿・点数・正答・採点基準は送信対象にしません。画像内に書かれた個人情報は自動検出できないため、送信前に先生が確認してください。</li><li>APIキーは保存せず、外部サービスへの認証時にだけ送ります。読み取った文字で点数を変更する機能はありません。</li><li>バックアップには個人情報が含まれます。学校が許可した保存場所で管理してください。</li></ul><p><a href="privacy.html" target="_blank" rel="noopener">プライバシーポリシー・学校での利用条件</a> ／ <a href="support.html" target="_blank" rel="noopener">不具合報告</a></p>
+  <h4>答案・成績データの扱い</h4><ul class="about"><li>採点・集計・PDF/Excel出力・保存は端末内で処理します。AIへの送信は、②のAIボタンで氏名などを隠し、送信内容を確認した場合だけ行います。</li><li>解答欄のAI自動設定では、先頭の生徒1人分の各ページで先生が氏名などを隠し、画像だけから作り直したPDFをAnthropicへ送信します。元PDFそのもの・名簿・採点結果・正答・採点基準は送りません。隠し忘れた情報は送信されるため、全ページを確認してください。</li><li>APIキーはこのブラウザーに保存します。共有端末では利用後にAI設定から削除してください。テストのバックアップにキーは含めません。AIによる採点はありません。</li><li>バックアップには個人情報が含まれます。学校が許可した保存場所で管理してください。</li></ul><p><a href="privacy.html" target="_blank" rel="noopener">プライバシーポリシー・学校での利用条件</a> ／ <a href="support.html" target="_blank" rel="noopener">不具合報告</a></p>
   <h4>使っているオープンソース</h4>
   <p class="muted" style="margin:0 0 4px">このアプリは次のソフトウェアを利用しています。いずれも無料で使え、配布が許されたライセンスです。</p>
   <table class="tests" style="font-size:13px">
@@ -543,6 +554,7 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
 
 
 <script type="module">
+import { createAILayout } from './ai-layout.js';
 import * as pdfjsLib from './vendor/pdfjs-dist@6.3.289/build/pdf.min.mjs';
 
 const PDF_LOCAL = new URL('./vendor/pdfjs-dist@6.3.289/', location.href).href;
@@ -3056,11 +3068,10 @@ async function renderGrade() {
   // 答案画像は常に登録名簿の順序。点数・AI結果では並べ替えない。
   grade.groups = null;
   $('#gradeSubject').innerHTML = '<option value="">未設定</option>' + SUBJECTS.map((x) => `<option${S.subject === x ? ' selected' : ''}>${esc(x)}</option>`).join('');
-  $('#btnReadSelected').disabled = !ocrSession.enabled;
   grade.order = sts.map((x) => x.st);
   grade.focus = clamp(grade.focus, 0, grade.order.length - 1);
   const tileHtml = (st, k) => `<div class="tile" data-k="${k}" data-sid="${st.id}">
-      <label><input class="readPick" type="checkbox" data-sid="${esc(st.id)}" ${ocrSession.enabled ? '' : 'disabled'}> この解答欄を読み取る</label><img alt=""><div class="mk"></div><div class="ai"></div>
+      <img alt=""><div class="mk"></div><div class="ai"></div>
       <div class="ft"><span>${esc(st.no)} ${esc(st.name)}</span><span><span class="score"></span> <button class="zoom ext" title="この生徒だけ枠を広げる（はみ出して書いたとき）">⤢</button><button class="zoom" title="答案全体を見る">🔍</button></span></div></div>`;
   grid.innerHTML = grade.order.map((st, k) => tileHtml(st, k)).join('');
   updateGroupHeads();
@@ -3492,97 +3503,16 @@ function pdfPen(doc, W, H) {
   };
 }
 
-// Optional OCR only. No grading API, no batch/full-page API, no comment-generation API.
-const ocrSession = { enabled: false, key: '', controller: null, pending: null };
-function disableOCR() {
-  ocrSession.enabled = false; ocrSession.key = ''; ocrSession.controller?.abort();
-  ocrSession.pending = null; $('#apiKey').value = ''; $('#enableAI').checked = false;
-  $('#btnReadSelected').disabled = true;
-  document.querySelectorAll('.readPick').forEach((c) => { c.checked = false; c.disabled = true; });
-}
-function strictAnswerCrop(bmp, r) {
-  const vals = [r.x,r.y,r.w,r.h];
-  if (vals.some((v) => !Number.isFinite(v)) || r.w <= 0 || r.h <= 0 || r.x < 0 || r.y < 0 || r.x+r.w > 1.001 || r.y+r.h > 1.001 || r.w*r.h > 0.5 || r.h > 0.8 || r.w > 0.95) throw new Error('選択範囲が広すぎるか不正です。解答部分だけに枠を調整してください。');
-  // No padding: surrounding names and headers must not be included.
-  const c = document.createElement('canvas');
-  c.width = Math.max(1, Math.round(r.w*bmp.width)); c.height = Math.max(1,Math.round(r.h*bmp.height));
-  c.getContext('2d').drawImage(bmp,r.x*bmp.width,r.y*bmp.height,r.w*bmp.width,r.h*bmp.height,0,0,c.width,c.height);
-  return c;
-}
-$('#btnSettings').onclick = () => { $('#enableAI').checked = ocrSession.enabled; $('#apiKey').value = ''; $('#settingsDlg').showModal(); };
-$('#settingsDlg').addEventListener('close', () => { $('#apiKey').value = ''; });
-$('#settingsCancel').onclick = () => { $('#apiKey').value = ''; $('#settingsDlg').close(); };
-$('#clearApiKey').onclick = () => { disableOCR(); toast('AI読み取りを無効化し、キーを消去しました'); };
-$('#settingsSave').onclick = () => {
-  if (!$('#enableAI').checked) disableOCR();
-  else {
-    const key = $('#apiKey').value.trim();
-    if (!key && !ocrSession.key) return toast('このページで使うAPIキーを入力してください');
-    ocrSession.key = key || ocrSession.key; ocrSession.enabled = true;
-  }
-  $('#apiKey').value = ''; $('#settingsDlg').close(); renderGrade();
-};
-window.addEventListener('pagehide', disableOCR);
-$('#grid').addEventListener('click', (e) => { if (e.target.classList.contains('readPick')) e.stopPropagation(); });
-$('#btnReadSelected').onclick = async () => {
-  if (!ocrSession.enabled || !ocrSession.key) return toast('AI読み取りは無効です');
-  const q = curQ(); if (!q || q.type !== 'q') return;
-  const ids = new Set([...document.querySelectorAll('#grid .readPick:checked')].map((c) => c.dataset.sid));
-  if (!ids.size) return toast('読み取りたい解答欄を個別に選択してください');
-  const state = S, images = [];
-  try {
-    for (const st of S.students.filter((st) => ids.has(st.id))) {
-      const r = stRect(st,q);
-      if (S.regions.some((n) => n.type === 'name' && n.page === q.page && Math.min(n.x+n.w,r.x+r.w)>Math.max(n.x,r.x) && Math.min(n.y+n.h,r.y+r.h)>Math.max(n.y,r.y))) throw new Error('氏名欄と重なる解答欄は送信できません');
-      const bmp = await pageBitmap(st.pageIds[q.page]);
-      let c; try { c = strictAnswerCrop(bmp,r); } finally { bmp.close(); }
-      images.push({ sid:st.id, data:c.toDataURL('image/png').split(',')[1] });
-    }
-    if (S !== state || !ocrSession.enabled) return;
-    ocrSession.pending = { state, qid:q.id, images };
-    $('#readPreview').innerHTML = images.map((im,i) => `<div>選択${i+1}<br><img style="max-width:300px;max-height:180px" src="data:image/png;base64,${im.data}" alt="送信する解答欄"></div>`).join('');
-    $('#readNoPersonal').checked = false; $('#readConfirmDlg').showModal();
-  } catch (e) { toast(e.message,6000); }
-};
-$('#readConfirmDlg').addEventListener('cancel',()=>{ocrSession.pending=null;$('#readPreview').innerHTML='';});
-$('#readCancel').onclick = () => { ocrSession.pending = null; $('#readPreview').innerHTML = ''; $('#readConfirmDlg').close(); };
-$('#readSend').onclick = async () => {
-  if (!$('#readNoPersonal').checked) return toast('画像と学校の利用ルールを確認してください');
-  const job = ocrSession.pending;
-  if (!job || !ocrSession.enabled || !ocrSession.key || S !== job.state) return;
-  ocrSession.pending = null; $('#readPreview').innerHTML = ''; $('#readConfirmDlg').close();
-  ocrSession.controller = new AbortController(); $('#btnReadSelected').disabled = true;
-  try {
-    for (const im of job.images) {
-      if (!ocrSession.enabled || S !== job.state) throw new Error('読み取りを中止しました');
-      const payload = {
-        model:'claude-haiku-5-5', max_tokens:1500,
-        messages:[{role:'user',content:[
-          {type:'image',source:{type:'base64',media_type:'image/png',data:im.data}},
-          {type:'text',text:'画像の文字を訂正・補完せず忠実に読み取り、JSON {"read":"文字列","uncertain":false} だけを返してください。判読不能な箇所があればuncertainをtrueにしてください。空欄はreadを空文字列にしてください。評価・正誤・点数は出さないでください。'}
-        ]}]
-      };
-      const control = await (await fetch('./release-control.json', {cache:'no-store'})).json();
-      if (control.stopAI || control.stopApp) { disableOCR(); throw new Error('管理者がAI読み取りを停止しています'); }
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method:'POST',signal:ocrSession.controller.signal,
-        headers:{'content-type':'application/json','x-api-key':ocrSession.key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-        body:JSON.stringify(payload)
-      });
-      if (!res.ok) throw new Error(`読み取りAPIが失敗しました（${res.status}）。点数は変更していません。`);
-      const msg = await res.json();
-      const text = msg.content?.find((x) => x.type === 'text')?.text || '';
-      const out = JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g,''));
-      if (typeof out.read !== 'string' || typeof out.uncertain !== 'boolean') throw new Error('読み取りの応答形式が不正です');
-      if (!ocrSession.enabled || S !== job.state) throw new Error('読み取りを中止しました');
-      S.scores[im.sid] ??= {};
-      S.scores[im.sid][job.qid] = { ...(S.scores[im.sid][job.qid] || {}), ai:{read:out.read,uncertain:out.uncertain,verdict:'read'} };
-      save();
-    }
-    toast('文字を読み取りました。点数は先生が入力してください。');
-  } catch (e) { toast(e.name === 'AbortError' ? '読み取りを中止しました' : e.message,7000); }
-  finally { ocrSession.controller = null; renderGrade(); }
-};
+// Web-only AI layout detection. API keys stay outside test/project backups.
+const aiLayout = createAILayout({getState:()=>S,loadBitmap:pageBitmap,toast,onApply:async (rows,state)=>{
+  if (S !== state) throw new Error('テストが切り替わったため反映できません。');
+  if (Object.values(S.scores).some(row=>Object.values(row).some(sc=>sc?.s!=null))) throw new Error('採点済みのテストには反映できません。新しいテストで実行するか、既存の枠を手動で修正してください。点数は変更していません。');
+  const before=S.regions;
+  const next=rows.map(q=>({...q,id:uid(),type:'q',max:q.max,kanten:q.kanten||'知',answer:'',rubric:'',aiLayout:true}));
+  S.regions=[...S.regions.filter(q=>!['q','score'].includes(q.type)),...next];
+  try {await writeNow();} catch(e) {S.regions=before;throw new Error('保存できなかったため、元の解答欄に戻しました。空き容量を確認してください。');}
+  cropCache.clear();refBoxCache.clear();setup.cands=[];setup.selId=next[0]?.id||null;renderSetup();
+}});
 
 // ───────── ④ 最終確認 ─────────
 // 生徒ごとに答案全体（○×・部分点の書き込み済み）を見て、確認済みにしていく。S.checked[生徒ID] = 確認した時刻
@@ -3866,7 +3796,7 @@ function renderReport(sts) {
       <div><b>観点別の平均</b><table class="rep">${kan}</table>
         <p><b>正答率が低い問題</b><br>${low.map((x) => `${esc(x.q.label)}（${x.r}%）`).join('、')}</p></div>
     </div>
-    ${hasAi ? '' : '<p class="help">③で任意のAI読み取りを実行すると、よくある誤答も表示されます。</p>'}
+    ${hasAi ? '' : '<p class="help">AIによる解答の読み取り・採点は行いません。</p>'}
     <table class="rep"><tr><th>問題</th><th>正答率</th><th>平均</th><th>中央値</th><th>よくある誤答（満点でなかった答案）</th></tr>${qrows}</table>`;
 }
 
@@ -4343,7 +4273,7 @@ function renderAll() {
   }
   $('#status').textContent = restored ? '前回の作業を復元しました' : '';
   renderAll(); renderTestList();
-  fetch('./release-control.json', { cache: 'no-store' }).then((r) => r.json()).then((c) => { if (c.stopAI) { disableOCR(); $('#enableAI').disabled = true; $('#apiKey').disabled = true; $('#aiPolicyHelp').textContent = 'AI採点はありません。AI読み取りも現在は提供元の設定で停止しています。手動採点をご利用ください。'; } if (c.stopApp) { disableOCR(); window.kirimaruStopApp(); } }).catch(() => {});
+  fetch('./release-control.json', { cache: 'no-store' }).then((r) => r.json()).then((c) => { aiLayout.applyControl(c); if (c.stopApp) { aiLayout.suspend(); window.kirimaruStopApp(); } }).catch(() => {});
   $('#moveNotice').hidden = true;
   // 初めて開いたときは、注意書きを表示する
   let seen = false; try { seen = localStorage.getItem('aboutSeen') === '1'; } catch {}

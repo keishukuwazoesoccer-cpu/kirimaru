@@ -1,6 +1,6 @@
 /* Web app cache only. Never stores API requests, answers, API keys, or release control. */
-const CACHE = 'kirimaru-web-20261108-3';
-const SHELL = ['./', './index.html', './web-release.js', './privacy.html', './support.html', './licenses.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png', './vendor/xlsx-export.js', './vendor/jspdf@4.2.1/dist/jspdf.umd.min.js', './vendor/pdfjs-dist@6.3.289/build/pdf.min.mjs', './vendor/pdfjs-dist@6.3.289/build/pdf.worker.min.mjs'];
+const CACHE = 'kirimaru-web-20261108-layout-1';
+const SHELL = ['./', './index.html', './web-release.js', './ai-layout.js', './privacy.html', './support.html', './licenses.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png', './vendor/xlsx-export.js', './vendor/jspdf@4.2.1/dist/jspdf.umd.min.js', './vendor/pdfjs-dist@6.3.289/build/pdf.min.mjs', './vendor/pdfjs-dist@6.3.289/build/pdf.worker.min.mjs'];
 self.addEventListener('install', e => e.waitUntil((async () => { await (await caches.open(CACHE)).addAll(SHELL); await self.skipWaiting(); })()));
 self.addEventListener('activate', e => e.waitUntil((async () => {
   for (const key of await caches.keys()) if (key.startsWith('kirimaru-') && key !== CACHE) await caches.delete(key);
