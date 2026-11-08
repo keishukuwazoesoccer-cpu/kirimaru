@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ja">
 <head>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-RM4DZjh3IFmojvqMpMTxAU3Zf6/S3Ri1+d/SR2fCUGo=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-FD5cZH32oXvlfN/ps8xzu1vqysifPGNabymKCcerSok=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta charset="utf-8">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -1224,9 +1224,9 @@ $('#projInput').onchange = async (e) => {
   busy('バックアップを読み込み中…');
   const previousState = S, importedBlobIds = [];
   try {
+    if (f.size > 250*1024*1024) throw new Error('バックアップは250MB以下に分けてください');
     const data = JSON.parse(await f.text());
     const st = data.state;
-    if (f.size > 250*1024*1024) throw new Error('バックアップは250MB以下に分けてください');
     if (!st || !Array.isArray(st.pages)) throw new Error('キリマルのバックアップではないようです');
     validateBackupState(st);
     await flushSave();
