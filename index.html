@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-tZYdQ/cHFvtDqNm7zPVAWKFF2WSBeX03I1Q+5kbcZXs=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-AOXcARk73BCIsNMNRxhfUSzqZlSb62RTTerWLe3FxrQ=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta charset="utf-8">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -215,7 +215,8 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
 <script src="./vendor/jspdf@4.2.1/dist/jspdf.umd.min.js"></script>
 <link rel="stylesheet" href="./web-tools.css">
 <link rel="canonical" href="https://zoemon-lab.github.io/kirimaru/">
-<script src="legacy-notice.js" defer></script></head>
+<script src="legacy-notice.js" defer></script>
+</head>
 <body>
 <p id="moveNotice" hidden></p>
 <header>
@@ -2055,9 +2056,9 @@ window.addEventListener('resize', () => { if ($('#view-setup').classList.contain
 // 候補ごとに「どの表（つながった罫線）に属するか」も記録し、大問の判定に使う。
 // 自動提案の感度（位置合わせなど内部の処理は、いつも「普通」で行う）
 const DET_SENS = {
-  high: { dark: 205, size: 0.7, under: 0.04, rect: 0.75, vary: 0.08 },
-  mid: { dark: 185, size: 1, under: 0.06, rect: 0.8, vary: 0.2 },
-  low: { dark: 165, size: 1.3, under: 0.08, rect: 0.85, vary: 0.3 },
+  high: { dark: 252, size: 0.7, under: 0.04, rect: 0.75, vary: 0.08 },
+  mid: { dark: 248, size: 1, under: 0.06, rect: 0.8, vary: 0.2 },
+  low: { dark: 235, size: 1.3, under: 0.08, rect: 0.85, vary: 0.3 },
 };
 function detOpts() {
   const k = localStorage.getItem('detSens') || 'mid';
@@ -2071,19 +2072,25 @@ function detectOnBitmap(bmp, pageIdx, opt = { ...DET_SENS.mid, dotted: false }) 
   ctx.drawImage(bmp, 0, 0, W, H);
   const px = ctx.getImageData(0, 0, W, H).data;
   const dark = new Uint8Array(W * H);
-  for (let i = 0; i < W * H; i++) dark[i] = (px[i * 4] * 0.3 + px[i * 4 + 1] * 0.59 + px[i * 4 + 2] * 0.11) < opt.dark ? 1 : 0;
+  // Estimate paper brightness so a gray scan background is not classified as a wall.
+  const histogram=new Uint32Array(256);
+  for(let i=0;i<W*H;i+=16)histogram[Math.round(px[i*4]*.3+px[i*4+1]*.59+px[i*4+2]*.11)]++;
+  let paper=255,seen=0;const target=Math.ceil(W*H/16)*.8;
+  for(let k=0;k<256;k++){seen+=histogram[k];if(seen>=target){paper=k;break;}}
+  const threshold=Math.min(opt.dark,Math.max(80,paper-5));
+  for (let i = 0; i < W * H; i++) dark[i] = (px[i * 4] * 0.3 + px[i * 4 + 1] * 0.59 + px[i * 4 + 2] * 0.11) < threshold ? 1 : 0;
 
   // 長い連続（3pxまでの途切れは許す）を罫線とみなす
   const line = new Uint8Array(W * H), hline = new Uint8Array(W * H);
   const minH = Math.round(W * 0.022), minV = Math.max(20, Math.round(H * 0.012)), GAP = 3;
   const scan = (len, n, at, min, marks) => {
     for (let a = 0; a < n; a++) {
-      let start = -1, last = -1;
+      let start = -1, last = -1, ink=0;
       for (let b = 0; b <= len; b++) {
         const d = b < len && dark[at(a, b)];
-        if (d) { if (start < 0) start = b; last = b; }
+        if (d) { if (start < 0) {start = b;ink=0;} last = b;ink++; }
         if (start >= 0 && (b === len || (!d && b - last > GAP))) {
-          if (last - start + 1 >= min) for (let k = start; k <= last; k++) for (const m of marks) m[at(a, k)] = 1;
+          if (last - start + 1 >= min && ink/(last-start+1)>=.72) for (let k = start; k <= last; k++) for (const m of marks) m[at(a, k)] = 1;
           start = -1;
         }
       }
@@ -2158,7 +2165,7 @@ function detectOnBitmap(bmp, pageIdx, opt = { ...DET_SENS.mid, dotted: false }) 
   const grids = new Map();
   for (const [t, b] of tbb) {
     const bw = b.x1 - b.x0 + 1, bh = b.y1 - b.y0 + 1;
-    if (bw < W * 0.12 || bh < H * 0.08) continue;
+    if (bw < W * 0.05 || bh < H * 0.055) continue;
     const count = (n, len, at) => { let k = 0, prev = false; for (let a = 0; a < n; a++) { let f = 0; for (let q = 0; q < len; q++) if (wl[at(a, q)] === t) f++; const on = f > len * 0.7; if (on && !prev) k++; prev = on; } return k; };
     const nh = count(bh, bw, (a, q) => (b.y0 + a) * W + b.x0 + q);
     const nv = count(bw, bh, (a, q) => (b.y0 + q) * W + b.x0 + a);
@@ -2399,7 +2406,7 @@ function buildLines(texts, asp) {
     let L = null;
     for (const t of r.items) {
       // 文字の高さの1.6倍以上離れていたら別の行（左右の列を混ぜない）
-      if (L && t.x - L.x1 < (Math.max(L.h, t.h) / asp) * 1.6) {
+      if (L && !/^第/.test(t.s.trim()) && t.x - L.x1 < (Math.max(L.h, t.h) / asp) * 1.6) {
         L.items.push(t); L.x1 = Math.max(L.x1, t.x + t.w); L.y0 = Math.min(L.y0, t.y); L.y1 = Math.max(L.y1, t.y + t.h);
       } else {
         L = { cy: r.cy, h: t.h, x0: t.x, x1: t.x + t.w, y0: t.y, y1: t.y + t.h, items: [t] };
@@ -2470,7 +2477,7 @@ function structureWithText(all, sel, texts, asp) {
   }
   for (const c of sel) {
     const tb = tbs.get(c.table);
-    const cand = heads.filter((h) => h.L.cy < tb.y0 + 0.01 && h.L.x0 > tb.x0 - 0.06 && h.L.x0 < tb.x0 + (tb.x1 - tb.x0) * 0.5)
+    const cand = heads.filter((h) => h.L.cy < tb.y0 + 0.01 && h.L.x0 > tb.x0 - 0.12 && h.L.x0 < tb.x0 + (tb.x1 - tb.x0) * 0.5)
       .sort((p, q) => q.L.cy - p.L.cy)[0];
     if (!cand) { rest.push(c); continue; }
     if (!groups.has(cand)) groups.set(cand, []);
@@ -2493,7 +2500,7 @@ function structureWithText(all, sel, texts, asp) {
     for (const L of notes) {
       g.kantenBy ??= kantenByLabel(L.text);
       g.kanten ??= kantenOf(L.text);
-      const pt = pointsOf(L === h.L ? L.text.replace(/^.*?問/, '') : L.text) || (L !== h.L && /^[0-9]{1,2}$/.test(L.text) ? { each: +L.text } : null);
+      const pt = pointsOf(L === h.L ? L.text.replace(/^.*?問/, '') : L.text) || (below.includes(L) && /^[0-9]{1,2}$/.test(L.text) ? { each: +L.text } : null);
       if (pt && !g.points) g.points = pt;
     }
     out.push(g);
@@ -2527,6 +2534,9 @@ function structureWithText(all, sel, texts, asp) {
         }
       }
       if (!main) main = labelOf(textIn(c, c.x, c.x + c.w * 0.3));
+      // Number columns can be narrower than the geometric detector's minimum cell width.
+      if(!main){const nearLabels=texts.filter(t=>/^[(（][0-9]{1,2}[)）]$/.test(zen2han(t.s.trim()))&&t.x>=c.x-.04&&t.x<c.x+c.w*.18&&t.y+t.h/2>=c.y-(c.grid ? .035 : 0)&&t.y+t.h/2<c.y+c.h).sort((a,b)=>Math.abs(a.x-c.x)-Math.abs(b.x-c.x)||Math.abs(a.y-c.y)-Math.abs(b.y-c.y));if(nearLabels[0])main=labelOf(nearLabels[0].s);}
+
       const sl = sub && labelOf(sub);
       c.lab = main; c.sub = sub ? (sl && /^[0-9]+$/.test(sl.t) ? `(${sl.t})` : sub).slice(0, 6) : '';
     }
@@ -2545,7 +2555,7 @@ function numberCands() {
     let sel = all.filter((c) => c.on && !c.fixed && (c.kind === 'box' || c.kind === 'line'));
     const texts = setup.texts?.[p];
     if (texts && texts.length) {
-      const pg = S.pages[0];
+      const pg = S.pages[0] || S.template?.pages[p] || S.key?.pages[p];
       const { groups, rest } = structureWithText(all, sel, texts, pg ? pg.h / pg.w : 1.414);
       groups.forEach((g) => allGroups.push({ ...g, items: g.items, page: p }));
       sel = rest;
@@ -2573,7 +2583,7 @@ function numberCands() {
     items.forEach((c, k) => {
       const mx = g.points?.by ? g.points.by[c.lab?.n ?? k + 1] ?? null : max;
       const lab = c.lab ? (/^[0-9]+$/.test(c.lab.t) ? `${g.dai}(${c.lab.t})` : `${g.dai}${c.lab.t}`) : daiLabel(g.dai, k + 1, n);
-      c.num = { dai: String(g.dai), sho: k + 1, label: lab + (c.sub || ''), max: mx, kanten: g.kantenBy?.[c.lab?.n ?? k + 1] || g.kanten || null };
+      c.num = { dai: String(g.dai), sho: c.lab?.n ?? k + 1, label: lab + (c.sub || ''), max: mx, kanten: g.kantenBy?.[c.lab?.n ?? k + 1] || g.kanten || null };
     });
   }
 }
@@ -2718,14 +2728,14 @@ async function detectPage(p) {
     const tBmp = await pageBitmap(tp.id);
     let tCands = detectOnBitmap(tBmp, p, opt);
     // 白紙なのに線の上に印刷があるもの（図形の線分・座標軸）は、下線の解答欄ではない
-    tCands = tCands.filter((c) => c.kind !== 'line' || !isFigureLine(tBmp, c, tp.texts));
+    tCands = tCands.filter((c) => c.kind !== 'line' || !isFigureLine(tBmp, c, (tp.texts||[])));
     const T = fitTransform(tCands, cands);
     map = (r) => ({ ...r, x: T.ax * r.x + T.bx, y: T.ay * r.y + T.by, w: T.ax * r.w, h: T.ay * r.h });
     cands = tCands.map(map); // 白紙の方が線がきれいなので、こちらの枠を使う
-    texts = tp.texts.map(map);
+    texts = (tp.texts||[]).map(map);
     // 漢字が文字データに入っていない見出し「1 [ ]」は、括弧の中（観点）だけ読み取る
     const asp = tp.h / tp.w;
-    for (const L of buildLines(tp.texts, asp)) {
+    for (const L of buildLines(tp.texts||[], asp)) {
       if (!/^[0-9]{1,2}[\[［][\]］]/.test(L.text)) continue;
       const lb = L.items.find((i) => /[\[［]/.test(i.s)), rb = L.items.find((i) => /[\]］]/.test(i.s));
       if (!lb || !rb) continue;
@@ -2751,20 +2761,22 @@ function dropFigureLines(cands, texts) {
 function openAreas(cands, texts, asp, p) {
   const lines = buildLines(texts, asp);
   const heads = lines.filter((L) => !isNaN(headingNum(L.text)) && !cands.some((b) => b.kind === 'box' && inside(b, (L.x0 + L.x1) / 2, L.cy)));
-  const isRight = (x) => x > 0.42;
+  const columns=[];
+  for(const x of heads.map(h=>h.x0).sort((a,b)=>a-b))if(!columns.length||x-columns[columns.length-1]>.07)columns.push(x);
+  const colOf=x=>columns.reduce((best,v,i)=>Math.abs(x-v)<Math.abs(x-columns[best])?i:best,0);
   const out = [];
   heads.forEach((h, i) => {
-    const right = isRight(h.x0);
-    const sameCol = (x) => isRight(x) === right;
+    const col=colOf(h.x0);
+    const sameCol=x=>colOf(x)===col;
     const nextHead = heads.filter((o) => o !== h && sameCol(o.x0) && o.y0 > h.y1).map((o) => o.y0);
     let yEnd = nextHead.length ? Math.min(...nextHead) - 0.008 : 0.97;
     // 同じ高さにもう一方の列の内容があれば、列の幅だけ。なければページの幅いっぱい
     const other = [...heads.filter((o) => !sameCol(o.x0)).map((o) => ({ x: o.x0, y: o.cy })), ...cands.map((c) => ({ x: c.x + c.w / 2, y: c.y + c.h / 2 }))]
       .filter((o) => !sameCol(o.x) && o.y > h.y1 && o.y < yEnd);
-    const split = Math.min(...heads.filter((o) => isRight(o.x0)).map((o) => o.x0), 0.5);
-    const x0 = right ? split - 0.01 : 0.02, x1 = right ? 0.98 : other.length ? split - 0.015 : 0.98;
+    const x0=Math.max(.01,columns[col]-.005),x1=col+1<columns.length?columns[col+1]-.015:.98;
     const inCol = (c) => c.x + c.w / 2 > x0 && c.x + c.w / 2 < x1;
     // 見出しのすぐ下に枠があれば普通の大問。少し離れて枠（得点欄など）があれば、その手前まで
+    if(cands.some(c=>c.grid&&inCol(c)&&c.y>h.y1&&c.y<yEnd))return;
     const belowBox = cands.filter((c) => inCol(c) && c.y + c.h / 2 > h.y1 && c.y < yEnd).map((c) => c.y);
     if (belowBox.length) {
       const first = Math.min(...belowBox);
@@ -2802,7 +2814,7 @@ $('#btnDetect').onclick = async () => {
       busy('枠を探しています…', `${p + 1} / ${S.pagesPerStudent} ページ`);
       let { cands, texts, scanBmp } = await detectPage(p);
       // すでに設定済みの枠と重なるものは除く
-      cands = cands.filter((c) => !S.regions.some((r) => r.page === p && overlap(r, c) > 0.5));
+      // Keep existing geometric neighbors until printed labels and footer tables are classified.
       // 下線の候補が枠と重なっていたら枠を優先
       cands = cands.filter((c) => c.kind === 'box' || !cands.some((o) => o.kind === 'box' && overlap(o, c) > 0.3));
       if (texts) {
@@ -2810,8 +2822,9 @@ $('#btnDetect').onclick = async () => {
         cands = cands.concat(openAreas(cands, texts, asp, p).filter((a) => !S.regions.some((r) => r.page === p && overlap(r, a) > 0.5)));
       }
       busy('生徒ごとの違いを調べています…', `${p + 1} / ${S.pagesPerStudent} ページ`);
-      await scoreVariation(cands, p);
-      cands.forEach((c) => (c.on = c.vary > detOpts().vary));
+      // Identical answers (including all blank) remain valid answer regions.
+      // Geometry and printed labels decide selection, not pupil-to-pupil differences.
+      cands.forEach((c) => (c.on = true));
       if (useOcr) {
         texts = await ocrTexts(scanBmp, cands, (k, n) => busy('印刷された文字を読み取っています…', `${p + 1}ページ目　${k} / ${n}`)).catch((e) => { toast(e.message, 4000); return null; });
         if (texts) cands = dropFigureLines(cands, texts);
@@ -2826,14 +2839,16 @@ $('#btnDetect').onclick = async () => {
           const t = textOf(c);
           // 画像から読み取った文字には手書きも混じるので、「(1)」の形のときだけ印刷の見出しとみなす
           const fromScan = texts.some((x) => x.ocr);
-          if (fromScan ? /^[(（][0-9]{1,2}[)）]$|^[①-⑳]$/.test(zen2han(t)) : t && (labelOf(t) || t.length <= 4) && zen2han(t).replace(LABEL_RE, '').length <= 4) c.on = false;
+          const labelPrefix=/^[(（][0-9]{1,2}[)）]/.test(zen2han(t));
+          if(!fromScan&&labelPrefix&&c.w<.07&&cands.some(o=>o!==c&&o.kind==='box'&&o.table===c.table&&o.w>c.w*1.5&&Math.abs(o.x-c.x-c.w)<.008&&o.y<c.y+c.h/2&&o.y+o.h>c.y+c.h/2)){c.on=false;continue;}
+          if (fromScan ? /^[(（][0-9]{1,2}[)）]$|^[①-⑳]$/.test(zen2han(t)) : t && /^(?:[(（][0-9]{1,2}[)）]|[①-⑳]|[ア-コ])$/.test(zen2han(t))) c.on = false;
         }
         // 得点欄：「合計」と書かれた欄は合計欄、「知識・技能」などの見出しの下の欄は観点別の欄
         const under = (c) => cands.find((o) => o !== c && o.table === c.table && Math.abs(o.y - (c.y + c.h)) < 0.01 && Math.min(o.x + o.w, c.x + c.w) - Math.max(o.x, c.x) > c.w * 0.5);
         for (const c of cands) {
           if (c.kind !== 'box' || c.area) continue;
           const t = textOf(c);
-          if (/合計|総得点|^得点/.test(t) && !S.regions.some((r) => r.type === 'total') && !pages.some((x) => x.cands.some((o) => o.kind === 'total')) && !cands.some((o) => o.kind === 'total')) {
+          if (/合計|総得点|^得点/.test(t) && !pages.some((x) => x.cands.some((o) => o.kind === 'total')) && !cands.some((o) => o.kind === 'total')) {
             // 「合計」だけの見出し欄の下に記入欄があれば、そちらを合計欄にする
             const below = t.length <= 4 && under(c);
             if (below) c.on = false;
@@ -2852,7 +2867,7 @@ $('#btnDetect').onclick = async () => {
   } finally { busy(null); }
 
   // 氏名欄：どこかのページに「氏名」「名前」の文字があればその記入欄。なければ1ページ目の最初の見出しより上（文字がなければページ上部）
-  if (!S.regions.some((r) => r.type === 'name')) {
+  {
     let found = false;
     for (const { cands, texts } of pages) {
       const nameL = texts ? buildLines(texts, asp).find((L) => /氏名|名前/.test(L.text)) : null;
@@ -2886,7 +2901,7 @@ $('#btnDetect').onclick = async () => {
     // 氏名・得点の表にあるほかの欄（組・番・見出しなど）は解答欄ではない
     const special = new Set(cands.filter((c) => ['name', 'total', 'kanten'].includes(c.kind) && !String(c.table).includes(':u')).map((c) => c.table));
     for (const c of cands) if (c.kind === 'box' && special.has(c.table)) c.on = false;
-    all = all.concat(cands);
+    all = all.concat(cands.filter(c=>!S.regions.some(r=>r.page===c.page&&overlap(r,c)>.5)));
   }
   if (!all.length) { toast('枠が見つかりませんでした。ドラッグで作成してください', 3500); return; }
   setup.cands = all; setup.selId = null;
