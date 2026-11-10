@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-jtyJIzB7kNvySrvuCbSbM5mqGOlaXtPeOppWt3oTWSg=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-eXKMz+sDRg98YOyQpsXlQBZkQ6+OJiGNo32Pp8RcWcs=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta charset="utf-8">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -753,10 +753,11 @@ const daiMax = (d) => questions().filter((q) => String(q.dai) === d).reduce((a, 
 const maxTotal = () => questions().reduce((a, q) => a + (+q.max || 0), 0);
 
 // ───────── 画像 ─────────
+let cacheEpoch=0;
 const blobCache = new Map();
 async function pageBlob(pid) {
-  if (!blobCache.has(pid)) blobCache.set(pid, await DB.get('blobs', pid));
-  return blobCache.get(pid);
+  if(blobCache.has(pid))return blobCache.get(pid);
+  const epoch=cacheEpoch,blob=await DB.get('blobs',pid);if(epoch===cacheEpoch)blobCache.set(pid,blob);return blob;
 }
 async function pageBitmap(pid) { return createImageBitmap(await pageBlob(pid)); }
 function cropPx(r, W, H) {
@@ -797,37 +798,44 @@ function stRect(st, q) {
 }
 const refBoxCache = new Map();
 async function ensureAlign(pageIdx, onProgress) {
+  const epoch=cacheEpoch,state=S;
   S.align ??= {};
   const ref = S.students[0]?.pageIds[pageIdx];
   if (!ref) return;
   S.align[ref] ??= { ax: 1, bx: 0, ay: 1, by: 0 };
   const todo = S.students.filter((st) => st.pageIds[pageIdx] && st.pageIds[pageIdx] !== ref && !S.align[st.pageIds[pageIdx]]);
   if (!todo.length) return;
-  if (!refBoxCache.has(ref)) { const b = await pageBitmap(ref); refBoxCache.set(ref, detectOnBitmap(b, pageIdx)); b.close(); }
+  if (!refBoxCache.has(ref)) { const b=await pageBitmap(ref);if(epoch!==cacheEpoch||state!==S){b.close();return;}refBoxCache.set(ref,detectOnBitmap(b,pageIdx));b.close(); }
   const A = refBoxCache.get(ref);
   let k = 0;
   for (const st of todo) {
     onProgress?.(++k, todo.length);
     const pid = st.pageIds[pageIdx];
     const b = await pageBitmap(pid);
+    if(epoch!==cacheEpoch||state!==S){b.close();return;}
     S.align[pid] = fitTransform(A, detectOnBitmap(b, pageIdx));
     b.close();
   }
   save();
 }
 async function ensureCrops(regs, onProgress) {
+  const epoch=cacheEpoch,state=S;
   for (const pg of new Set(regs.map((r) => r.page))) await ensureAlign(pg);
+  if(epoch!==cacheEpoch||state!==S)return;
   const sts = S.students;
   for (let i = 0; i < sts.length; i++) {
+    if(epoch!==cacheEpoch||state!==S)return;
     const st = sts[i];
     const need = regs.filter((r) => !cropCache.has(cropKey(st, r)) && st.pageIds[r.page]);
     if (!need.length) continue;
     const byPage = new Map();
     need.forEach((r) => { if (!byPage.has(r.page)) byPage.set(r.page, []); byPage.get(r.page).push(r); });
     for (const [pg, rs] of byPage) {
-      const bmp = await pageBitmap(st.pageIds[pg]);
+      let bmp;try{bmp=await pageBitmap(st.pageIds[pg]);}catch(e){if(epoch!==cacheEpoch||state!==S)return;throw e;}
+      if(epoch!==cacheEpoch||state!==S){bmp.close();return;}
       for (const r of rs) {
         const blob = await toBlob(cropToCanvas(bmp, stRect(st, r), 700));
+        if(epoch!==cacheEpoch||state!==S){bmp.close();return;}
         cropCache.set(cropKey(st, r), URL.createObjectURL(blob));
       }
       bmp.close();
@@ -1254,7 +1262,13 @@ $('#projInput').onchange = async (e) => {
   busy(null);
 };
 function resetCaches() {
-  blobCache.clear(); cropCache.clear(); refBoxCache.clear();
+  cacheEpoch++;for(const url of cropCache.values())URL.revokeObjectURL(url);for(const url of keyCache.values())URL.revokeObjectURL(url);keyCache.clear();
+  blobCache.clear();cropCache.clear();refBoxCache.clear();setup.bmp?.close?.();setup.bmp=null;ext.bmp?.close?.();ext.bmp=null;
+  document.querySelectorAll('#studentTable,#grid,#keyPanel,#ckPages,#ckScores,#ckList,#ckSummary,#sumTable,#classCard,#report,#diffList,#regionList,#bulkTable,#ckTitle,#ckInfo,#gqTitle,#gqInfo,#pageDlgTitle,#extTitle').forEach(el=>el.replaceChildren());
+  dlg.st=null;ext.st=null;ext.q=null;pop.st=null;hideMarkPop();slipPrevHist=null;clearTimeout(slipPrevTimer);
+  document.querySelector('#webDialog')?.replaceChildren();$('#namesText').value='';for(const id of ['slipPrev','printFrame']){const frame=document.getElementById(id);frame.onload=null;frame.srcdoc='';}
+  for(const id of ['setupCanvas','pageDlgCanvas','extCanvas']){const c=document.getElementById(id);c.width=c.width;}
+
   setup.epoch=(setup.epoch||0)+1;setup.source=null;
   setup.stIdx = 0; setup.page = 0; setup.bmpKey = ''; setup.selId = null;
   grade.qid = null; grade.focus = 0; grade.order = [];
@@ -1275,8 +1289,10 @@ async function openTest(id) {
   toast(`「${S.name}」を開きました`);
 }
 async function deleteTest(id) {
+  if($('#busy').classList.contains('on'))return;
   const entry=TESTS.list.find(t=>t.id===id);if(!entry||!confirm(`「${entry.name}」の答案画像・採点結果をすべて削除します。元に戻せません。よろしいですか？`))return;
   try {
+    busy('テストを削除しています…');
     await flushSave();const remaining=TESTS.list.filter(t=>t.id!==id),used=new Set();
     for(const t of remaining){const state=t.id===S.id?S:await DB.get('kv','test:'+t.id);for(const p of backupPages(state||{pages:[]}))used.add(p.id);}
     let nextState=S;
@@ -1287,7 +1303,7 @@ async function deleteTest(id) {
       tx.oncomplete=resolve;tx.onerror=tx.onabort=()=>reject(tx.error||Error('削除を中断しました'));
     });
     TESTS.list=remaining;S=nextState;resetCaches();renderAll();renderTestList();toast('テストと不要な画像を削除しました');
-  }catch(e){alert('削除できませんでした。元のデータを保持しています：'+e.message);}
+  }catch(e){alert('削除できませんでした。元のデータを保持しています：'+e.message);}finally{busy(null)}
 }
 function renderTestList() {
   renderSwitch();
@@ -3060,7 +3076,7 @@ async function renderGrade() {
   });
   webTools?.refresh();
   // 他の問題の切り抜きも裏で用意しておく
-  ensureCrops(questions());
+  ensureCrops(questions()).catch(()=>{if(curQ()===q)toast('答案の切り抜きを準備できませんでした。元の答案を確認してください。',6000)});
 }
 // ───── この生徒だけ枠を広げる ─────
 const ext = { st: null, q: null, bmp: null, view: null, e: null, drag: null };
@@ -4108,7 +4124,7 @@ function printDoc(title, body) {
     td .kb{font-size:11px;margin:0 4px 0 0} .kl{font-size:11px;margin:0 0 3px} .kl .kb{font-size:10px;margin:0 3px 0 0}
     .note{font-size:11px;color:#555;margin:0 0 4px}
     .cm{border:1px solid #aaa;min-height:60px;padding:8px;font-size:14px;white-space:pre-wrap}
-  </style><link rel="stylesheet" href="./web-tools.css">
+  </style>
 </head><body>${body}<script>
     // 個票が1枚に入りきらないときは、その人の分だけ縮小する（少し余裕をもたせる）
     for (const s of document.querySelectorAll('.slip')) {
