@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-eXKMz+sDRg98YOyQpsXlQBZkQ6+OJiGNo32Pp8RcWcs=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-tZYdQ/cHFvtDqNm7zPVAWKFF2WSBeX03I1Q+5kbcZXs=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta charset="utf-8">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -462,7 +462,7 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
 <canvas id="layoutCanvas" style="display:block;max-width:100%;max-height:66vh;width:auto;height:auto;touch-action:none;cursor:crosshair;border:1px solid #bbb"></canvas>
 <button id="layoutPrepare" class="primary">隠したPDFを作って確認へ</button></div>
 <div data-layout-stage="preview" hidden><h4>送信するPDFを確認してください</h4><p id="layoutPdfInfo"></p><p>下の画像だけからPDFを新しく作成しています。黒塗りの下に元の文字・画像・注釈を残しません。</p><div id="layoutPreviews" class="layout-images"></div><button id="layoutDownload">送信するPDFを保存して確認</button><p><label><input id="layoutConsent" type="checkbox"> 全ページの黒塗り後の画像に個人情報が残っていないこと、学校の利用規程とAnthropicへの送信を確認しました</label></p><button id="layoutBack">戻って隠す範囲を直す</button><button id="layoutSend" class="primary">このPDFをAnthropicへ送って解析</button></div>
-<div data-layout-stage="result" hidden><h4>解答欄・番号・配点の確認</h4><p>AIの読み取りには誤りがあります。枠の位置を画像で、番号と配点を表で確認・修正してください。空の配点は先生が入力します。既存の問題欄は置き換わります。採点済みのテストには反映できません。</p><p id="layoutWarnings" style="white-space:pre-wrap"></p><div style="overflow:auto"><table><thead><tr><th>ページ</th><th>大問</th><th>小問</th><th>表示名</th><th>配点</th><th>観点</th></tr></thead><tbody id="layoutRows"></tbody></table></div><div id="layoutResultImages" class="layout-images"></div><p><label><input id="layoutAccept" type="checkbox"> 枠の位置・大問・小問・配点を確認しました</label></p><button id="layoutApply" class="primary">この内容で解答欄を設定</button></div>
+<div data-layout-stage="result" hidden><h4>解答欄・番号・配点の確認</h4><p>AIの読み取りには誤りがあります。枠の位置を画像で、番号と配点を表で確認・修正してください。空の配点は先生が入力します。既存の問題欄は置き換わります。採点・答案コメント・小問メモ・確認フラグのあるテストには反映できません。</p><p id="layoutWarnings" style="white-space:pre-wrap"></p><div style="overflow:auto"><table><thead><tr><th>ページ</th><th>大問</th><th>小問</th><th>表示名</th><th>配点</th><th>観点</th></tr></thead><tbody id="layoutRows"></tbody></table></div><div id="layoutResultImages" class="layout-images"></div><p><label><input id="layoutAccept" type="checkbox"> 枠の位置・大問・小問・配点を確認しました</label></p><button id="layoutApply" class="primary">この内容で解答欄を設定</button></div>
 <p><button id="layoutCancel">中止して閉じる</button></p></dialog>
 <style>#layoutDlg [hidden]{display:none!important}.layout-images{display:flex;gap:12px;flex-wrap:wrap;max-height:65vh;overflow:auto}.layout-images img{max-width:100%;max-height:60vh;object-fit:contain;border:1px solid #bbc8cf}.layout-images figure{margin:0;max-width:100%}#layoutRows input{max-width:140px;width:100%;min-width:60px}#layoutRows input[type=number]{width:80px}</style>
 
@@ -3501,7 +3501,7 @@ function pdfPen(doc, W, H) {
 // Web-only AI layout detection. API keys stay outside test/project backups.
 const aiLayout = createAILayout({getState:()=>S,loadBitmap:pageBitmap,toast,onApply:async (rows,state)=>{
   if (S !== state) throw new Error('テストが切り替わったため反映できません。');
-  if (Object.values(S.scores).some(row=>Object.values(row).some(sc=>sc?.s!=null))) throw new Error('採点済みのテストには反映できません。新しいテストで実行するか、既存の枠を手動で修正してください。点数は変更していません。');
+  if (Object.values(S.scores).some(row=>Object.keys(row).length)||S.regions.some(q=>q.teacherMemo)) throw new Error('採点済み、または答案コメント・小問メモ・確認フラグのあるテストには反映できません。新しいテストで実行するか、既存の枠を手動で修正してください。点数は変更していません。');
   const before=S.regions;
   const next=rows.map(q=>({...q,id:uid(),type:'q',max:q.max,kanten:q.kanten||'知',answer:'',rubric:'',aiLayout:true}));
   S.regions=[...S.regions.filter(q=>!['q','score'].includes(q.type)),...next];

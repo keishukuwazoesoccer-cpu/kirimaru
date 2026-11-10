@@ -356,11 +356,11 @@ export function createAILayout({ getState, loadBitmap, onApply, toast }) {
     const s = getState();
     if (
       Object.values(s.scores || {}).some((row) =>
-        Object.values(row).some((sc) => sc?.s != null),
-      )
+        Object.keys(row).length > 0,
+      ) || s.regions.some(q=>q.teacherMemo)
     )
       return toast(
-        "採点済みのテストではAIによる解答欄の置換はできません。手動で枠を修正してください。",
+        "採点済み、または答案コメント・小問メモ・確認フラグのあるテストではAIによる解答欄の置換はできません。手動で枠を修正してください。",
         7000,
       );
     const ids = [...(s.students[0]?.pageIds || [])];
