@@ -215,7 +215,7 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
 <script src="./vendor/jspdf@4.2.1/dist/jspdf.umd.min.js"></script>
 <link rel="stylesheet" href="./web-tools.css">
 <link rel="canonical" href="https://zoemon-lab.github.io/kirimaru/">
-</head>
+<script src="legacy-notice.js" defer></script></head>
 <body>
 <p id="moveNotice" hidden></p>
 <header>
@@ -257,7 +257,7 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
       <div id="scanCheck"></div>
     </div>
     <div class="card">
-      <h2>白紙の解答用紙（任意）</h2>
+      <h2>白紙の解答用紙（AI自動設定を使う場合は必須）</h2>
       <p class="muted" style="margin-top:0">Wordなどで作った<b>元のPDF</b>を入れると、②の「枠を自動で提案」で、印刷された「第1問」「(1)」「2点×3」「知識・技能」を正確に読み取って、大問・小問・配点・観点を自動で入れます。</p>
       <div class="row"><button id="btnTpl">白紙の解答用紙PDFを選ぶ</button><span id="tplInfo" class="muted"></span><button id="btnTplClear">外す</button></div>
       <input type="file" id="tplInput" accept="application/pdf" hidden>
@@ -348,7 +348,7 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
         </div>
         <div class="row" style="margin-top:6px">
 
-          <span id="aiPolicyHelp" class="help" style="flex-basis:100%">採点は先生が行います。AIは②で氏名などを隠したPDFから、解答欄・番号・配点を設定するために使います。</span>
+          <span id="aiPolicyHelp" class="help" style="flex-basis:100%">採点は先生が行います。AIは②で登録した白紙の解答用紙から、解答欄・番号・配点を設定するために使います。</span>
           <button id="btnAllO">未採点を全部○</button>
           <button id="btnAllX">未採点を全部×</button>
           <button id="btnKeyShow" title="この問題の模範解答を、答案の上に表示します">📘 模範解答</button>
@@ -446,7 +446,7 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
 
 <dialog id="settingsDlg">
 <h3>Anthropic APIキーを入力して保存</h3>
-<p>解答用紙PDFを取り込み、②のAIボタンを押して氏名などを隠すと、解答欄・大問・小問・配点の設定にAIを使えます。採点は先生が行います。API利用料は利用者の負担です。</p>
+<p>①で白紙の解答用紙を登録し、②のAIボタンで送信内容を確認すると、解答欄・大問・小問・配点の設定にAIを使えます。採点は先生が行います。API利用料は利用者の負担です。</p>
 <label>APIキー <input id="apiKey" type="password" maxlength="512" autocomplete="off" spellcheck="false" placeholder="登録・変更するときに入力"></label>
 <p id="savedKeyStatus" class="help"></p><label><input type="checkbox" id="rememberApiKey"> この専用端末にAPIキーを保存する（共有端末では選ばない）</label><p>未選択の場合は、このタブを閉じるまで保存します。端末への保存は暗号化されず、同じ配布元の他アプリから完全には隔離されません。バックアップには含めません。</p>
 <label>解析モデル <select id="layoutModel"><option value="claude-sonnet-5-5">Claude Sonnet 5.5</option><option value="claude-haiku-5-5">Claude Haiku 5.5</option></select></label>
@@ -456,12 +456,11 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
 <div class="row"><h3>AIで解答欄・番号・配点を自動入力</h3><span class="spacer"></span><button id="layoutClose">閉じる</button></div>
 <p id="layoutStatus" role="status" style="white-space:pre-wrap"></p>
 <div id="layoutMaskStep" data-layout-stage="mask">
-<h4>氏名などの部分を選択してください</h4><p>送信する先頭の生徒1人分の各ページで、氏名・学級・出席番号・学校名などをドラッグして黒く隠します。本文中に個人情報がある場合も追加で隠してください。</p>
-<div id="layoutMaskActions"><div class="row"><button id="layoutPrev">前のページ</button><select id="layoutPage"></select><button id="layoutNext">次のページ</button><button id="layoutUndo">このページの黒塗りを1つ戻す</button><span id="layoutPageInfo"></span></div>
+<h4>白紙の解答用紙を準備しています</h4><div id="layoutMaskActions"><div class="row"><button id="layoutPrev">前のページ</button><select id="layoutPage"></select><button id="layoutNext">次のページ</button><button id="layoutUndo">このページの黒塗りを1つ戻す</button><span id="layoutPageInfo"></span></div>
 <label><input id="layoutNoName" type="checkbox"> このページには隠す必要のある個人情報がないことを確認しました</label></div>
 <canvas id="layoutCanvas" style="display:block;max-width:100%;max-height:66vh;width:auto;height:auto;touch-action:none;cursor:crosshair;border:1px solid #bbb"></canvas>
 <button id="layoutPrepare" class="primary">隠したPDFを作って確認へ</button></div>
-<div data-layout-stage="preview" hidden><h4>送信するPDFを確認してください</h4><p id="layoutPdfInfo"></p><p>下の画像だけからPDFを新しく作成しています。黒塗りの下に元の文字・画像・注釈を残しません。</p><div id="layoutPreviews" class="layout-images"></div><button id="layoutDownload">送信するPDFを保存して確認</button><p><label><input id="layoutConsent" type="checkbox"> 全ページの黒塗り後の画像に個人情報が残っていないこと、学校の利用規程とAnthropicへの送信を確認しました</label></p><button id="layoutBack">戻って隠す範囲を直す</button><button id="layoutSend" class="primary">このPDFをAnthropicへ送って解析</button></div>
+<div data-layout-stage="preview" hidden><h4>送信するPDFを確認してください</h4><p id="layoutPdfInfo"></p><p>登録した白紙の解答用紙の画像だけからPDFを新しく作成します。元の文字層・注釈・入力欄は送信しません。</p><div id="layoutPreviews" class="layout-images"></div><button id="layoutDownload">送信するPDFを保存して確認</button><p><label><input id="layoutConsent" type="checkbox"> 全ページが未記入の白紙の解答用紙で、氏名などの個人情報がないこと、学校の利用規程とAnthropicへの送信を確認しました</label></p><button id="layoutBack">閉じて白紙の登録を確認する</button><button id="layoutSend" class="primary">このPDFをAnthropicへ送って解析</button></div>
 <div data-layout-stage="result" hidden><h4>解答欄・番号・配点の確認</h4><p>AIの読み取りには誤りがあります。枠の位置を画像で、番号と配点を表で確認・修正してください。空の配点は先生が入力します。既存の問題欄は置き換わります。採点・答案コメント・小問メモ・確認フラグのあるテストには反映できません。</p><p id="layoutWarnings" style="white-space:pre-wrap"></p><div style="overflow:auto"><table><thead><tr><th>ページ</th><th>大問</th><th>小問</th><th>表示名</th><th>配点</th><th>観点</th></tr></thead><tbody id="layoutRows"></tbody></table></div><div id="layoutResultImages" class="layout-images"></div><p><label><input id="layoutAccept" type="checkbox"> 枠の位置・大問・小問・配点を確認しました</label></p><button id="layoutApply" class="primary">この内容で解答欄を設定</button></div>
 <p><button id="layoutCancel">中止して閉じる</button></p></dialog>
 <style>#layoutDlg [hidden]{display:none!important}.layout-images{display:flex;gap:12px;flex-wrap:wrap;max-height:65vh;overflow:auto}.layout-images img{max-width:100%;max-height:60vh;object-fit:contain;border:1px solid #bbc8cf}.layout-images figure{margin:0;max-width:100%}#layoutRows input{max-width:140px;width:100%;min-width:60px}#layoutRows input[type=number]{width:80px}</style>
@@ -511,7 +510,7 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
     <li>大切なデータは「バックアップを保存」でときどき書き出してください。ブラウザの履歴・サイトデータを消すと、作業内容も消えます。</li>
     <li>学校に個人情報・端末の利用ルールがある場合は、それに従ってください。</li>
   </ul>
-  <h4>答案・成績データの扱い</h4><ul class="about"><li>採点・集計・PDF/Excel出力・保存は端末内で処理します。AIへの送信は、②のAIボタンで氏名などを隠し、送信内容を確認した場合だけ行います。</li><li>解答欄のAI自動設定では、先頭の生徒1人分の各ページで先生が氏名などを隠し、画像だけから作り直したPDFをAnthropicへ送信します。元PDFそのもの・名簿・採点結果・正答・採点基準は送りません。隠し忘れた情報は送信されるため、全ページを確認してください。</li><li>APIキーはこのブラウザーに保存します。共有端末では利用後にAI設定から削除してください。テストのバックアップにキーは含めません。AIによる採点はありません。</li><li>バックアップには個人情報が含まれます。学校が許可した保存場所で管理してください。</li></ul><p><a href="privacy.html" target="_blank" rel="noopener">プライバシーポリシー・学校での利用条件</a> ／ <a href="support.html" target="_blank" rel="noopener">お問い合わせ（Instagram @zoemon123）</a></p>
+  <h4>答案・成績データの扱い</h4><ul class="about"><li>採点・集計・PDF/Excel出力・保存は端末内で処理します。AIへの送信は、登録した白紙の解答用紙を②のAIボタンで確認し、送信に同意した場合だけ行います。</li><li>解答欄のAI自動設定では、登録した白紙の解答用紙の画像から作ったPDFだけをAnthropicへ送信します。白紙が未登録なら送信できません。生徒の答案・模範解答・名簿・採点結果は送りません。登録した用紙に個人情報や記入済みの解答がないことを全ページ確認してください。</li><li>APIキーはこのブラウザーに保存します。共有端末では利用後にAI設定から削除してください。テストのバックアップにキーは含めません。AIによる採点はありません。</li><li>バックアップには個人情報が含まれます。学校が許可した保存場所で管理してください。</li></ul><p><a href="privacy.html" target="_blank" rel="noopener">プライバシーポリシー・学校での利用条件</a> ／ <a href="support.html" target="_blank" rel="noopener">お問い合わせ（Instagram @zoemon123）</a></p>
   <h4>利用・二次配布について</h4><p>キリマルは無料で利用できます。ただし、zoemonlabの許可なく、キリマル本体のファイルを第三者へ配布・転載・再公開すること（二次配布）を禁止します。紹介・共有には公式配布ページのURLをご利用ください。この制限は、利用者が作成・出力した答案PDF・成績表などには適用しません。同梱のオープンソースソフトウェアには、各ソフトウェアのライセンスが適用されます。</p>
   <h4>使っているオープンソース</h4>
   <p class="muted" style="margin:0 0 4px">このアプリは次のソフトウェアを利用しています。いずれも無料で使え、配布が許されたライセンスです。</p>
@@ -548,7 +547,6 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
 <div id="toast"></div>
 
 
-<script src="./legacy-notice.js" defer></script>
 <script src="./compatibility.js" defer></script>
 <script type="module">
 import { validateProject,validateTemplate,decodeBackupImage,acquireEditorLock } from './security.js';
