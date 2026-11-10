@@ -1,6 +1,6 @@
 {
   "stopAI": false,
   "stopApp": false,
-  "version": "web-2026.11.08-layout-1",
-  "reason": "氏名などを隠したPDFによる解答欄の自動設定。送信前の確認必須。AI採点なし。"
+  "version": "web-2026.11.11-audit-1",
+  "reason": "公開前監査の修正。AI採点なし。AI解答欄設定は黒塗りと送信前確認が必須。"
 }

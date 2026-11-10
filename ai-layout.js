@@ -127,13 +127,11 @@ function maskedCanvas(source, masks) {
   const g = c.getContext("2d");
   g.drawImage(source, 0, 0);
   g.fillStyle = "#000";
-  for (const m of masks)
-    g.fillRect(
-      Math.floor(m.x * c.width),
-      Math.floor(m.y * c.height),
-      Math.ceil(m.w * c.width),
-      Math.ceil(m.h * c.height),
-    );
+  for (const m of masks) {
+    const left=Math.max(0,Math.floor(m.x*c.width)-2),top=Math.max(0,Math.floor(m.y*c.height)-2);
+    const right=Math.min(c.width,Math.ceil((m.x+m.w)*c.width)+2),bottom=Math.min(c.height,Math.ceil((m.y+m.h)*c.height)+2);
+    g.fillRect(left,top,right-left,bottom-top);
+  }
   return c;
 }
 export function createAILayout({ getState, loadBitmap, onApply, toast }) {
@@ -141,7 +139,7 @@ export function createAILayout({ getState, loadBitmap, onApply, toast }) {
     dlg = $("#layoutDlg"),
     canvas = $("#layoutCanvas"),
     ctx = canvas.getContext("2d");
-  let key = readSaved(KEY),
+  let key = readSaved(KEY) || (()=>{try{return sessionStorage.getItem(KEY)||""}catch{return ""}})(),
     model = readSaved(MODEL_KEY) || MODELS[0],
     job = null,
     serial = 0,
@@ -151,12 +149,13 @@ export function createAILayout({ getState, loadBitmap, onApply, toast }) {
   if (!MODELS.includes(model)) model = MODELS[0];
   function keyStatus() {
     $("#savedKeyStatus").textContent = key
-      ? "APIキーをこのブラウザーに保存済みです。"
+      ? (readSaved(KEY) ? "APIキーをこの専用端末に保存済みです。" : "APIキーをこのタブを閉じるまで保存しています。")
       : "APIキーは未登録です。";
   }
   function settings() {
     $("#apiKey").value = "";
     $("#layoutModel").value = model;
+    $("#rememberApiKey").checked=!!readSaved(KEY);
     keyStatus();
     $("#settingsDlg").showModal();
   }
@@ -172,7 +171,7 @@ export function createAILayout({ getState, loadBitmap, onApply, toast }) {
       return toast("AnthropicのAPIキーを入力してください");
     try {
       localStorage.setItem(MODEL_KEY, $("#layoutModel").value);
-      localStorage.setItem(KEY, next);
+      if($("#rememberApiKey").checked){localStorage.setItem(KEY,next);sessionStorage.removeItem(KEY)}else{sessionStorage.setItem(KEY,next);localStorage.removeItem(KEY)}
     } catch {
       return toast(
         "このブラウザーに保存できませんでした。保存が許可された通常のブラウザーでお試しください。",
@@ -183,11 +182,11 @@ export function createAILayout({ getState, loadBitmap, onApply, toast }) {
     model = $("#layoutModel").value;
     $("#apiKey").value = "";
     $("#settingsDlg").close();
-    toast("APIキーをこのブラウザーに保存しました");
+    toast($("#rememberApiKey").checked?"APIキーをこの専用端末に保存しました":"APIキーをこのタブを閉じるまで保存しました");
   };
   $("#clearApiKey").onclick = () => {
     try {
-      localStorage.removeItem(KEY);
+      localStorage.removeItem(KEY);sessionStorage.removeItem(KEY);
     } catch {
       return toast("保存したキーを削除できませんでした");
     }
@@ -583,6 +582,7 @@ export function createAILayout({ getState, loadBitmap, onApply, toast }) {
     $("#layoutSend").disabled = true;
     $("#layoutBack").disabled = true;
     const activeController = new AbortController();
+    const requestTimer=setTimeout(()=>activeController.abort(),120000);
     controller = activeController;
     try {
       status("氏名などを隠したPDFをAnthropicへ送信し、解答欄を調べています…");
@@ -703,6 +703,7 @@ export function createAILayout({ getState, loadBitmap, onApply, toast }) {
                 : e.message,
         );
     } finally {
+      clearTimeout(requestTimer);
       if (controller === activeController) {
         controller = null;
         $("#layoutSend").disabled = false;

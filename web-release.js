@@ -36,7 +36,7 @@
     forget.textContent = "保存したAPIキーを削除";
     forget.onclick = () => {
       try {
-        localStorage.removeItem("kirimaru.web.anthropicKey.v1");
+        localStorage.removeItem("kirimaru.web.anthropicKey.v1");sessionStorage.removeItem("kirimaru.web.anthropicKey.v1");
         forget.textContent = "APIキーを削除しました";
         forget.disabled = true;
       } catch {
@@ -75,7 +75,7 @@
     const status = document.createElement("p");
     status.className = "help";
     status.textContent =
-      "提供：zoemonlab ｜ Web版 2026.11.08 AI解答欄設定 ｜ 手動採点";
+      "提供：zoemonlab ｜ Web版 2026.11.11 準備・採点サポート ｜ 手動採点";
     document.querySelector("#moveNotice")?.after(status);
     if ("serviceWorker" in navigator)
       navigator.serviceWorker.register("./sw.js").catch(() => {});

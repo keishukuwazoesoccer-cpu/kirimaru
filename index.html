@@ -1,7 +1,8 @@
 <!doctype html>
 <html lang="ja">
 <head>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-PxCDY7c/Nt70X2Vx0a6PNFlR5xwDT9yzkgGQNF76S1g=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-jtyJIzB7kNvySrvuCbSbM5mqGOlaXtPeOppWt3oTWSg=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta charset="utf-8">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -212,6 +213,8 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
 </style>
 <script src="./vendor/xlsx-export.js"></script>
 <script src="./vendor/jspdf@4.2.1/dist/jspdf.umd.min.js"></script>
+<link rel="stylesheet" href="./web-tools.css">
+<link rel="canonical" href="https://zoemon-lab.github.io/kirimaru/">
 </head>
 <body>
 <p id="moveNotice" hidden></p>
@@ -294,14 +297,14 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
   <div id="setupWrap">
     <div id="setupCanvasBox">
       <div class="row" style="margin-bottom:8px">
-        <label>表示する答案 <select id="setupStudent"></select></label>
+        <label>表示する用紙 <select id="setupStudent"></select></label>
         <label>ページ <select id="setupPage"></select></label>
-        <button id="btnDetectAI" class="primary">✨ AIで解答欄・番号・配点を自動入力</button><button id="btnDetect">端末内で枠を提案（AIなし）</button>
-        <label class="muted" title="線の薄い答案や小さな欄が拾えないときは「敏感」、余計な候補が多いときは「控えめ」">感度 <select id="detSens"><option value="high">敏感</option><option value="mid">普通</option><option value="low">控えめ</option></select></label>
+        <button id="btnDetectAI">✨ AIで解答欄・番号・配点を自動入力</button><button id="btnDetect" class="primary">端末内で枠を提案（AIなし）</button>
+        <details class="web-advanced"><summary>検出・番号付けの詳細</summary><div class="row"><label class="muted" title="線の薄い答案や小さな欄が拾えないときは「敏感」、余計な候補が多いときは「控えめ」">感度 <select id="detSens"><option value="high">敏感</option><option value="mid">普通</option><option value="low">控えめ</option></select></label>
         <label class="muted" title="点線・破線で書かれた解答欄も探します"><input type="checkbox" id="detDotted"> 点線の欄も探す</label>
         <button id="btnNumMode" title="大問・小問の番号を、枠を順番にクリックしてつけます">🔢 クリックで番号付け</button>
         <label class="muted" title="白紙の解答用紙PDFがないとき、答案の画像から「第1問」「(1)」などを読み取ります（数十秒かかります）"><input type="checkbox" id="ocrToggle" checked> 印刷の文字も読み取る</label>
-        <span class="help">ドラッグで枠を作成／枠をドラッグで移動／右下の角で大きさ変更／<kbd>Delete</kbd>で削除</span>
+        <span class="help">ドラッグで枠を作成／枠をドラッグで移動／右下の角で大きさ変更／<kbd>Delete</kbd>で削除</span></div></details>
       </div>
       <div id="numBar">
         <b>🔢 クリックで番号付け</b>
@@ -339,7 +342,6 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
           <b id="gqTitle"></b>
           <span class="muted" id="gqInfo"></span>
           <span class="spacer"></span>
-          <span class="muted">答案は名簿順</span>
           <label>教科 <select id="gradeSubject"></select></label>
 
           <label class="muted">大きさ <input type="range" id="tileSize" min="140" max="600" value="240"></label>
@@ -364,13 +366,6 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
   <div id="ckWrap">
     <div id="ckSide">
       <div id="ckSummary"></div>
-      <div class="row" style="padding:8px 12px;border-bottom:1px solid var(--line)">
-        <label class="muted">表示 <select id="ckFilter">
-          <option value="all">全員</option>
-          <option value="todo">未確認の生徒</option>
-          <option value="issue">要確認（未採点・AIと違う）</option>
-        </select></label>
-      </div>
       <div id="ckList"></div>
     </div>
     <div id="ckMain">
@@ -381,7 +376,6 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
           <button id="ckNext">次 ▶</button>
           <span class="muted" id="ckInfo"></span>
           <span class="spacer"></span>
-          <button id="ckNextIssue">次の要確認へ</button>
           <button id="ckOk" class="primary">✓ 確認済みにして次へ</button>
         </div>
         <p class="help" style="margin:6px 0 0">答案の解答欄をクリックすると、○・×・部分点を直せます（オレンジの点線＝未採点）。右の表に点数を直接入れることもできます。<kbd>Enter</kbd>で確認済みにして次へ、<kbd>←</kbd><kbd>→</kbd>で生徒を移動。</p>
@@ -454,7 +448,7 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
 <h3>Anthropic APIキーを入力して保存</h3>
 <p>解答用紙PDFを取り込み、②のAIボタンを押して氏名などを隠すと、解答欄・大問・小問・配点の設定にAIを使えます。採点は先生が行います。API利用料は利用者の負担です。</p>
 <label>APIキー <input id="apiKey" type="password" maxlength="512" autocomplete="off" spellcheck="false" placeholder="登録・変更するときに入力"></label>
-<p id="savedKeyStatus" class="help"></p><p>このブラウザーに保存します。共有端末では利用後に削除してください。テストのバックアップには含めません。</p>
+<p id="savedKeyStatus" class="help"></p><label><input type="checkbox" id="rememberApiKey"> この専用端末にAPIキーを保存する（共有端末では選ばない）</label><p>未選択の場合は、このタブを閉じるまで保存します。端末への保存は暗号化されず、同じ配布元の他アプリから完全には隔離されません。バックアップには含めません。</p>
 <label>解析モデル <select id="layoutModel"><option value="claude-sonnet-5-5">Claude Sonnet 5.5</option><option value="claude-haiku-5-5">Claude Haiku 5.5</option></select></label>
 <div class="row"><button id="clearApiKey">保存したキーを削除</button><button id="settingsCancel">キャンセル</button><button id="settingsSave" class="primary">保存</button></div>
 </dialog>
@@ -508,7 +502,7 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
 
 <dialog id="aboutDlg" style="max-width:640px">
   <h3 style="margin-top:0">⭕ キリマル について</h3>
-  <p class="muted">提供：<b>zoemonlab</b> ／ <a href="https://keishukuwazoesoccer-cpu.github.io/kirimaru/" target="_blank" rel="noopener">公式配布ページ</a></p>
+  <p class="muted">提供：<b>zoemonlab</b> ／ <a href="https://zoemon-lab.github.io/kirimaru/" target="_blank" rel="noopener">公式配布ページ</a></p>
   <p class="muted" style="margin-top:-6px">答案PDFを問題ごとに切り取って、一覧で採点するアプリです。無料で使えます。</p>
   <h4>使う前にお読みください</h4>
   <ul class="about">
@@ -517,7 +511,8 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
     <li>大切なデータは「バックアップを保存」でときどき書き出してください。ブラウザの履歴・サイトデータを消すと、作業内容も消えます。</li>
     <li>学校に個人情報・端末の利用ルールがある場合は、それに従ってください。</li>
   </ul>
-  <h4>答案・成績データの扱い</h4><ul class="about"><li>採点・集計・PDF/Excel出力・保存は端末内で処理します。AIへの送信は、②のAIボタンで氏名などを隠し、送信内容を確認した場合だけ行います。</li><li>解答欄のAI自動設定では、先頭の生徒1人分の各ページで先生が氏名などを隠し、画像だけから作り直したPDFをAnthropicへ送信します。元PDFそのもの・名簿・採点結果・正答・採点基準は送りません。隠し忘れた情報は送信されるため、全ページを確認してください。</li><li>APIキーはこのブラウザーに保存します。共有端末では利用後にAI設定から削除してください。テストのバックアップにキーは含めません。AIによる採点はありません。</li><li>バックアップには個人情報が含まれます。学校が許可した保存場所で管理してください。</li></ul><p><a href="privacy.html" target="_blank" rel="noopener">プライバシーポリシー・学校での利用条件</a> ／ <a href="support.html" target="_blank" rel="noopener">不具合報告</a></p>
+  <h4>答案・成績データの扱い</h4><ul class="about"><li>採点・集計・PDF/Excel出力・保存は端末内で処理します。AIへの送信は、②のAIボタンで氏名などを隠し、送信内容を確認した場合だけ行います。</li><li>解答欄のAI自動設定では、先頭の生徒1人分の各ページで先生が氏名などを隠し、画像だけから作り直したPDFをAnthropicへ送信します。元PDFそのもの・名簿・採点結果・正答・採点基準は送りません。隠し忘れた情報は送信されるため、全ページを確認してください。</li><li>APIキーはこのブラウザーに保存します。共有端末では利用後にAI設定から削除してください。テストのバックアップにキーは含めません。AIによる採点はありません。</li><li>バックアップには個人情報が含まれます。学校が許可した保存場所で管理してください。</li></ul><p><a href="privacy.html" target="_blank" rel="noopener">プライバシーポリシー・学校での利用条件</a> ／ <a href="support.html" target="_blank" rel="noopener">お問い合わせ（Instagram @zoemon123）</a></p>
+  <h4>利用・二次配布について</h4><p>キリマルは無料で利用できます。ただし、zoemonlabの許可なく、キリマル本体のファイルを第三者へ配布・転載・再公開すること（二次配布）を禁止します。紹介・共有には公式配布ページのURLをご利用ください。この制限は、利用者が作成・出力した答案PDF・成績表などには適用しません。同梱のオープンソースソフトウェアには、各ソフトウェアのライセンスが適用されます。</p>
   <h4>使っているオープンソース</h4>
   <p class="muted" style="margin:0 0 4px">このアプリは次のソフトウェアを利用しています。いずれも無料で使え、配布が許されたライセンスです。</p>
   <table class="tests" style="font-size:13px">
@@ -553,12 +548,16 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
 <div id="toast"></div>
 
 
+<script src="./legacy-notice.js" defer></script>
+<script src="./compatibility.js" defer></script>
 <script type="module">
+import { validateProject,validateTemplate,decodeBackupImage,acquireEditorLock } from './security.js';
+import { auditPoints,createWebTools } from './web-tools.js';
 import { createAILayout } from './ai-layout.js';
-import * as pdfjsLib from './vendor/pdfjs-dist@6.3.289/build/pdf.min.mjs';
+import * as pdfjsLib from './vendor/pdfjs-dist@6.3.289/legacy/build/pdf.min.mjs';
 
 const PDF_LOCAL = new URL('./vendor/pdfjs-dist@6.3.289/', location.href).href;
-const PDFJS_WORKER = PDF_LOCAL + 'build/pdf.worker.min.mjs';
+const PDFJS_WORKER = PDF_LOCAL + 'legacy/build/pdf.worker.min.mjs';
 const PDFJS_OPTS = { cMapUrl: PDF_LOCAL+'cmaps/', cMapPacked: true, standardFontDataUrl: PDF_LOCAL+'standard_fonts/', wasmUrl: PDF_LOCAL+'wasm/', isEvalSupported:false, enableXfa:false };
 const TESSERACT_JS = './vendor/tesseract/tesseract.min.js';
 
@@ -572,7 +571,7 @@ const TYPE_COLOR = { q: '#2457c5', score: '#ef6c00', name: '#2e7d32', total: '#c
 const PAGE_LONG_SIDE = 2200;
 
 const $ = (s) => document.querySelector(s);
-const uid = () => Math.random().toString(36).slice(2, 10);
+const uid=()=>crypto.randomUUID?.()||Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // ───────── 保存（IndexedDB） ─────────
@@ -586,9 +585,9 @@ const DB = {
       r.onsuccess = () => res(r.result);
       r.onerror = () => rej(r.error);
     });
-    if (fresh) await this.migrateOld().catch((e) => console.warn('旧データの引き継ぎに失敗', e));
+    if(fresh||!await this.get('kv','tests'))await this.migrateOld().catch(()=>toast('旧データを引き継げませんでした。元のデータは保持しています。サイトデータを削除せず、容量・保存許可を確認して再読み込みしてください。',15000));
     // 引き継ぎ済みなのに旧名のデータベースが残っていれば消す
-    else if ((await this.get('kv', 'tests')) && (indexedDB.databases ? await indexedDB.databases() : []).some((d) => d.name === 'saitengiri')) indexedDB.deleteDatabase('saitengiri');
+    // Legacy data is removed only after a complete atomic migration below.
   },
   // 旧名のときに保存したデータがあれば、初回だけそのまま引き継ぐ（旧データは消さずに残す）
   async migrateOld() {
@@ -597,19 +596,13 @@ const DB = {
     if (!list.some((d) => d.name === OLD)) return;
     const old = await new Promise((res, rej) => { const r = indexedDB.open(OLD); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
     try {
-      for (const store of ['kv', 'blobs']) {
-        if (!old.objectStoreNames.contains(store)) continue;
-        const rows = await new Promise((res, rej) => {
-          const out = [], c = old.transaction(store).objectStore(store).openCursor();
-          c.onsuccess = () => { const cur = c.result; if (!cur) return res(out); out.push([cur.key, cur.value]); cur.continue(); };
-          c.onerror = () => rej(c.error);
-        });
-        await new Promise((res, rej) => {
-          const t = this.db.transaction(store, 'readwrite'), s = t.objectStore(store);
-          for (const [k, v] of rows) s.put(v, k);
-          t.oncomplete = res; t.onerror = () => rej(t.error);
-        });
+      const allRows={};
+      for(const store of ['kv','blobs']){
+        if(!old.objectStoreNames.contains(store)){allRows[store]=[];continue;}
+        allRows[store]=await new Promise((resolve,reject)=>{const rows=[],cursor=old.transaction(store).objectStore(store).openCursor();cursor.onsuccess=()=>{const c=cursor.result;if(!c)return resolve(rows);rows.push([c.key,c.value]);c.continue()};cursor.onerror=()=>reject(cursor.error)});
+        if(store==='blobs')for(const row of allRows[store])if(row[1] instanceof Blob)row[1]={bytes:await row[1].arrayBuffer(),type:row[1].type};
       }
+      await new Promise((resolve,reject)=>{const tx=this.db.transaction(['kv','blobs'],'readwrite');for(const store of ['kv','blobs'])for(const [k,v]of allRows[store])tx.objectStore(store).put(v,k);tx.oncomplete=resolve;tx.onerror=tx.onabort=()=>reject(tx.error||Error('旧データの引き継ぎを中断しました'));});
     } finally { old.close(); }
     // 引き継ぎが終わったら、旧名のデータベースは消す
     indexedDB.deleteDatabase(OLD);
@@ -617,13 +610,14 @@ const DB = {
   tx(store, mode, fn) {
     return new Promise((res, rej) => {
       const t = this.db.transaction(store, mode);
-      const req = fn(t.objectStore(store));
+      let req;try { req=fn(t.objectStore(store)); } catch(e) { t.abort();rej(e);return; }
+      t.onabort=()=>rej(t.error||new DOMException('保存処理が中断されました','AbortError'));
       t.oncomplete = () => res(req ? req.result : undefined);
       t.onerror = () => rej(t.error);
     });
   },
-  get(store, key) { return this.tx(store, 'readonly', (s) => s.get(key)); },
-  put(store, key, val) { return this.tx(store, 'readwrite', (s) => s.put(val, key)); },
+  async get(store,key) { const value=await this.tx(store,'readonly',s=>s.get(key));return store==='blobs'&&value?.bytes instanceof ArrayBuffer?new Blob([value.bytes],{type:value.type||'image/jpeg'}):value; },
+  async put(store,key,val) { if(store==='blobs'&&val instanceof Blob)val={bytes:await val.arrayBuffer(),type:val.type};return this.tx(store,'readwrite',s=>s.put(val,key)); },
   clear(store) { return this.tx(store, 'readwrite', (s) => s.clear()); },
   del(store, key) { return this.tx(store, 'readwrite', (s) => s.delete(key)); },
 };
@@ -632,6 +626,7 @@ function newState() {
   return { id: uid(), version: 1, name: '無題のテスト', subject: localStorage.getItem('lastSubject') || '', pagesPerStudent: 1, pages: [], students: [], regions: [], scores: {}, pad: 1 };
 }
 let S = newState();
+let webTools = null;
 let saveTimer = null;
 // テストは1つずつ kv 'test:<id>' に保存し、一覧を kv 'tests'、開いているテストを kv 'cur' に記録する
 const TESTS = { list: [] };
@@ -653,6 +648,8 @@ function writeNow() {
   saveQueue = job; return job;
 }
 function save() {
+  S.changedAt = Date.now();
+  webTools?.refresh();
   clearTimeout(saveTimer); $('#status').textContent = '保存中…';
   saveTimer = setTimeout(() => { saveTimer = null; writeNow().catch(() => {}); }, 400);
 }
@@ -714,12 +711,20 @@ function rebuildStudents() {
   }
 }
 function getScore(sid, rid) { return S.scores[sid]?.[rid] || null; }
+function changeMax(q,v) {
+  if(!Number.isFinite(v)||v<0||v>100000){toast('配点は0〜100000の数値で入力してください');return false;}
+  if(S.students.some(st=>getScore(st.id,q.id)?.s>v)){toast('入力済みの得点より小さい配点には変更できません。先に採点を確認してください。',7000);return false;}
+  q.max=v;S.checked={};return true;
+}
 function setScore(sid, rid, s) {
   const q = S.regions.find((r) => r.id === rid);
   if (s != null && (typeof s !== 'number' || !Number.isFinite(s) || !q || s < 0 || s > q.max)) throw new Error('点数が範囲外です');
   S.scores[sid] ??= {};
   const cur = S.scores[sid][rid] || {};
-  S.scores[sid][rid] = { ...cur, s };
+  const next = { ...cur, s };
+  webTools?.history.record(sid, rid, S.scores[sid][rid], next, S.checked?.[sid]);
+  S.scores[sid][rid] = next;
+  if (S.checked) delete S.checked[sid];
   save();
 }
 // AIの判定と先生の採点が食い違っているか
@@ -731,7 +736,7 @@ function markOf(q, sc) {
   return 'p';
 }
 function studentTotals(st) {
-  const res = { total: 0, kanten: {}, dai: {} };
+  const res = { total: 0, kanten:Object.create(null), dai:Object.create(null) };
   KANTEN.forEach((k) => (res.kanten[k.key] = 0));
   for (const q of questions()) {
     const s = getScore(st.id, q.id)?.s || 0;
@@ -833,12 +838,15 @@ async function ensureCrops(regs, onProgress) {
 
 // ───────── PDF 読み込み ─────────
 async function getPdfjs() {
-  if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-    // 別オリジンのワーカーは直接起動できないため Blob URL 経由で読み込む
-    const src = await (await fetch(PDFJS_WORKER)).text();
-    pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
-  }
+  pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
   return pdfjsLib;
+}
+async function readPdfTextContent(page) {
+  if (page.isPureXfa) return page.getTextContent();
+  const reader = page.streamTextContent().getReader(), result = {items:[],styles:{}};
+  try { while (true) { const {value,done}=await reader.read(); if(done)break; result.items.push(...value.items); Object.assign(result.styles,value.styles); } }
+  finally { reader.releaseLock(); }
+  return result;
 }
 // PDFの1ページを画像（JPEG）にする
 async function renderPdfPage(page) {
@@ -853,31 +861,25 @@ async function renderPdfPage(page) {
   return { blob: await toBlob(c, 'image/jpeg', 0.82), w: c.width, h: c.height };
 }
 async function importPDFs(files) {
+  let prepared;
+  try { prepared=await webTools.preparePDF(files,'answers'); } catch(e) { alert('PDFを読み込めませんでした：'+e.message); return; }
+  if(!prepared)return;
   const append = $('#appendMode').checked;
+  if(append && prepared.joined && S.pages.length && S.pagesPerStudent!==1) { alert('左右連結した答案は、1人1ページのテストに追加してください。'); return; }
   if (!append && S.pages.length && !confirm('新しいPDFが正常に読み込めた場合だけ答案を置き換えます。元の採点結果を残すには先にバックアップを保存してください。続けますか？')) return;
   const original = S, staged = [];
   try {
     await flushSave();
-    const lib = await getPdfjs();
-    for (const file of files) {
-      if (file.size > 100*1024*1024) throw new Error('100MBを超えるPDFは分割して読み込んでください');
-      const task = lib.getDocument({ data:await file.arrayBuffer(), ...PDFJS_OPTS });
-      try {
-        const pdf = await task.promise;
-        if (pdf.numPages > 500) throw new Error('500ページを超えるPDFは分割してください');
-        for (let i=1;i<=pdf.numPages;i++) {
-          busy('PDFを画像に変換中…', `${i} / ${pdf.numPages}`);
-          const page = await pdf.getPage(i);
-          const {blob,w,h} = await renderPdfPage(page); const id = uid();
-          await DB.put('blobs',id,blob); staged.push({id,w,h}); page.cleanup();
-        }
-      } finally { await task.destroy(); }
+    for (const pg of prepared.pages) {
+      const id=uid(); await DB.put('blobs',id,pg.blob); staged.push({id,w:pg.w,h:pg.h});
     }
     if (!staged.length) throw new Error('読み込めるページがありません');
     if (S !== original) throw new Error('テストが変わったため読み込みを中止しました');
     const next = structuredClone(original);
-    if (!append) { next.pages=[];next.students=[];next.scores={};next.align={}; }
+    if (!append) { next.pages=[];next.students=[];next.scores={};next.align={};next.scoreJournal={past:[],future:[]};next.checked={}; }
+    if(prepared.joined)next.pagesPerStudent=1;
     next.pages.push(...staged); next.lastCls = $('#clsName').value.trim();
+    if(next.pages.length>2000)throw new Error('1つのテストは2000ページまでです。テストを分けてください');
     S=next;
     try {
       rebuildStudents();
@@ -892,43 +894,25 @@ async function importPDFs(files) {
 }
 
 // 白紙の解答用紙（Word等で作った元のPDF）：画像と、埋め込まれた文字（位置つき）を保存する
-async function importTemplate(file) {
-  const lib = await getPdfjs();
+async function importTemplate(file) { return importReference(file,'template'); }
+async function importReference(file,kind) {
+  const original=S, staged=[];
   try {
-    const task = lib.getDocument({ data: await file.arrayBuffer(), ...PDFJS_OPTS });
-    const pdf = await task.promise;
-    const pages = [];
-    for (let i = 1; i <= pdf.numPages; i++) {
-      busy('白紙の解答用紙を読み込み中…', `${i} / ${pdf.numPages} ページ`);
-      const page = await pdf.getPage(i);
-      const { blob, w, h } = await renderPdfPage(page);
-      const id = uid();
-      await DB.put('blobs', id, blob); blobCache.set(id, blob);
-      const vp = page.getViewport({ scale: 1 });
-      const tc = await page.getTextContent();
-      const texts = [];
-      for (const it of tc.items) {
-        if (!it.str || !it.str.trim()) continue;
-        const fh = Math.hypot(it.transform[2], it.transform[3]) || it.height;
-        const [vx, vy] = vp.convertToViewportPoint(it.transform[4], it.transform[5]);
-        texts.push({ s: it.str, x: vx / vp.width, y: (vy - fh * 0.88) / vp.height, w: it.width / vp.width, h: fh / vp.height });
-      }
-      pages.push({ id, w, h, texts });
-      page.cleanup();
-    }
-    await task.destroy();
-    for (const pg of S.template?.pages || []) { await DB.del('blobs', pg.id); blobCache.delete(pg.id); }
-    S.template = { name: file.name, pages };
-    save();
-    toast(`白紙の解答用紙（${pages.length}ページ）を読み込みました`);
-  } catch (e) {
-    alert('読み込みに失敗しました: ' + e.message);
-  } finally { busy(null); }
-  renderImport();
+    const prepared=await webTools.preparePDF([file],kind); if(!prepared)return;
+    await flushSave();
+    if(S!==original)throw new Error('テストが変わりました');
+    for(const p of prepared.pages){const id=uid();await DB.put('blobs',id,p.blob);staged.push({id,w:p.w,h:p.h,...(kind==='template'?{texts:p.texts}:{})});}
+    const next=structuredClone(original);next[kind]={name:prepared.name,pages:staged,...(kind==='key'?{align:{}}:{})};
+    if(!next.students.length)next.pagesPerStudent=staged.length;
+    S=next;try{await writeNow()}catch(e){S=original;throw e}
+    setup.source=kind;setup.bmpKey='';keyCache.clear();renderAll();
+    toast(`${kind==='template'?'白紙の解答用紙':'模範解答'}を${staged.length}ページで読み込みました`);
+  }catch(e){for(const p of staged)await DB.del('blobs',p.id).catch(()=>{});alert('元のデータを保持しています。読み込みに失敗しました：'+e.message)}finally{busy(null)}
 }
 
 // ───────── ① 読み込み画面 ─────────
 async function renderImport() {
+  webTools?.refresh();
   renderRosterBox();
   $('#projName').value = S.name;
   $('#pps').value = S.pagesPerStudent;
@@ -969,11 +953,15 @@ $('#studentTable').addEventListener('input', (e) => {
   if (e.target.classList.contains('no')) st.no = e.target.value;
   if (e.target.classList.contains('cl')) st.cls = e.target.value;
   if (e.target.classList.contains('nm')) st.name = e.target.value;
+  if(S.checked)delete S.checked[st.id];
   save();
 });
 $('#projName').addEventListener('input', (e) => { S.name = e.target.value; save(); });
 $('#pps').addEventListener('change', (e) => {
-  S.pagesPerStudent = clamp(parseInt(e.target.value) || 1, 1, 8);
+  const next=clamp(parseInt(e.target.value)||1,1,8);if(next===S.pagesPerStudent)return;
+  if(Object.values(S.scores).some(row=>Object.keys(row).length)){e.target.value=S.pagesPerStudent;return toast('採点・コメントがあるため1人分のページ数は変更できません。新しいテストで先にページ数を設定してください。',8000);}
+  if(S.students.some(st=>st.name)&&!confirm('1人分のページ数を変更すると、答案との対応を守るため入力済みの氏名を外します。名簿を確認して入れ直してください。続けますか？')){e.target.value=S.pagesPerStudent;return;}
+  S.pagesPerStudent=next;S.students=[];S.scores={};S.checked={};S.scoreJournal={past:[],future:[]};
   S.regions.forEach((r) => (r.page = Math.min(r.page, S.pagesPerStudent - 1)));
   rebuildStudents(); save(); renderImport();
 });
@@ -1085,8 +1073,7 @@ async function fixScan() {
 $('#btnTpl').onclick = () => $('#tplInput').click();
 $('#tplInput').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) importTemplate(f); };
 $('#btnTplClear').onclick = async () => {
-  for (const pg of S.template?.pages || []) { await DB.del('blobs', pg.id); blobCache.delete(pg.id); }
-  S.template = null; save(); renderImport();
+  const previous=S;try{await flushSave();S={...S,template:null};await writeNow();setup.bmpKey='';renderImport();}catch(e){S=previous;alert('白紙の設定を解除できませんでした：'+e.message)}
 };
 $('#btnPasteNames').onclick = () => {
   $('#namesText').value = '';
@@ -1097,6 +1084,7 @@ $('#btnPasteNames').onclick = () => {
 $('#namesCancel').onclick = () => $('#namesDlg').close();
 $('#namesOk').onclick = () => {
   const lines = $('#namesText').value.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  S.checked={};
   lines.forEach((l, i) => {
     const st = S.students[i]; if (!st) return;
     const cols = l.split(/\t|,/).map((c) => c.trim());
@@ -1201,17 +1189,7 @@ $('#rosterOk').onclick = async () => {
 };
 
 // プロジェクトのバックアップ（別取り込みの模範解答も含める）
-function validateBackupState(st) {
-  const walk = (x, depth = 0) => { if (depth > 50) throw new Error('バックアップが複雑すぎます'); if (!x || typeof x !== 'object') return; for (const k of Object.keys(x)) { if (['__proto__','constructor','prototype'].includes(k)) throw new Error('不正なバックアップです'); walk(x[k], depth + 1); } };
-  walk(st);
-  if (!Array.isArray(st.students) || !Array.isArray(st.regions) || !st.scores || typeof st.scores !== 'object') throw new Error('バックアップ形式が不正です');
-  const ids = new Set();
-  for (const pg of backupPages(st)) { if (!/^[a-zA-Z0-9_-]{1,100}$/.test(pg.id) || !Number.isFinite(pg.w) || !Number.isFinite(pg.h) || pg.w <= 0 || pg.h <= 0 || ids.has(pg.id)) throw new Error('画像情報が不正です'); ids.add(pg.id); }
-  const qmap = new Map();
-  for (const q of st.regions) { if (q.kanten != null && !['知','思','主'].includes(q.kanten)) throw new Error('観点が不正です'); if (![q.x,q.y,q.w,q.h].every(Number.isFinite) || q.w <= 0 || q.h <= 0 || q.x < 0 || q.y < 0 || q.x+q.w > 1.01 || q.y+q.h > 1.01 || !Number.isInteger(q.page) || q.page < 0) throw new Error('解答欄の範囲が不正です'); if (!/^[a-zA-Z0-9_-]{1,100}$/.test(q.id)) throw new Error('解答欄IDが不正です'); if (q.type === 'q') { if (!Number.isFinite(q.max) || q.max < 0) throw new Error('配点が不正です'); qmap.set(q.id,q); } }
-  for (const stt of st.students) { if (!/^[a-zA-Z0-9_-]{1,100}$/.test(stt.id) || !Array.isArray(stt.pageIds) || stt.pageIds.some((id) => !ids.has(id))) throw new Error('名簿の画像参照が不正です'); }
-  for (const row of Object.values(st.scores)) for (const [qid,sc] of Object.entries(row)) if (sc.s != null && (!qmap.has(qid) || !Number.isFinite(sc.s) || sc.s < 0 || sc.s > qmap.get(qid).max)) throw new Error('点数が範囲外です');
-}
+function validateBackupState(st,options) { return validateProject(st,options); }
 function backupPages(state) {
   return [...new Map([...state.pages, ...(state.template?.pages || []), ...(state.key?.pages || [])].map((p) => [p.id, p])).values()];
 }
@@ -1219,7 +1197,9 @@ const blobToB64 = (b) => new Promise((r) => { const fr = new FileReader(); fr.on
 $('#btnExportProj').onclick = async () => {
   busy('バックアップを作成中…');
   try {
-    const state = JSON.parse(JSON.stringify(S));
+    await flushSave().catch(()=>toast('端末内の保存に失敗していても、画面の最新データを書き出します。',6000));
+    const exportedAt=Date.now();
+    const state = JSON.parse(JSON.stringify(S));state.backupExportedAt=exportedAt;
     const images = Object.create(null);
     for (const p of backupPages(state)) {
       const blob = await pageBlob(p.id);
@@ -1227,6 +1207,7 @@ $('#btnExportProj').onclick = async () => {
       images[p.id] = await blobToB64(blob);
     }
     download(new Blob([JSON.stringify({ state, images })], { type: 'application/json' }), `${safeName()}_キリマル.json`);
+    S.backupExportedAt=exportedAt;await writeNow().catch(()=>toast('バックアップをダウンロードしました。ブラウザ内の保存は失敗しています。保存先のファイルを確認してください。',10000));webTools?.refresh();
   } catch (err) { alert('バックアップを保存できませんでした：' + err.message); }
   finally { busy(null); }
 };
@@ -1241,6 +1222,13 @@ $('#projInput').onchange = async (e) => {
     const st = data.state;
     if (!st || !Array.isArray(st.pages)) throw new Error('キリマルのバックアップではないようです');
     validateBackupState(st);
+    if(st.expectedMax!=null&&(!Number.isFinite(st.expectedMax)||st.expectedMax<0))throw Error('満点が不正です');
+    for(const q of st.regions){if(q.partialPresets!=null&&(!Array.isArray(q.partialPresets)||q.partialPresets.length>12||q.partialPresets.some(p=>!Number.isFinite(p.score)||p.score<0||p.score>q.max||typeof p.label!=='string'||p.label.length>40)))throw Error('部分点設定が不正です');if(q.teacherMemo!=null&&(typeof q.teacherMemo!=='string'||q.teacherMemo.length>4000))throw Error('小問メモが不正です');}
+    for(const row of Object.values(st.scores))for(const sc of Object.values(row)){if(sc.comment!=null&&(typeof sc.comment!=='string'||sc.comment.length>4000))throw Error('コメントが不正です');if(sc.review!=null&&typeof sc.review!=='boolean')throw Error('確認フラグが不正です');}
+    // Undo records are convenience metadata, never trust records loaded from a file.
+    st.scoreJournal={past:[],future:[]};
+    if(!await webTools.confirmRestore(st))return;
+    busy('バックアップを取り込み中…');
     await flushSave();
     // 今のテストは残したまま、新しいテストとして追加する（画像のIDは付け直して、ほかのテストと混ざらないようにする）
     const map = Object.create(null);
@@ -1252,9 +1240,7 @@ $('#projInput').onchange = async (e) => {
       map[pg.id] = uid();
     }
     for (const pg of pages) {
-      const source = data.images[pg.id], split = source.indexOf(',');
-      const bytes = Uint8Array.from(atob(source.slice(split + 1)), (c) => c.charCodeAt(0));
-      const blob = new Blob([bytes], {type: source.slice(5, source.indexOf(';'))});
+      const blob=await decodeBackupImage(data.images[pg.id],pg);
       await DB.put('blobs', map[pg.id], blob); importedBlobIds.push(map[pg.id]);
     }
     for (const group of [st.pages, st.template?.pages || [], st.key?.pages || []]) for (const pg of group) pg.id = map[pg.id];
@@ -1269,6 +1255,7 @@ $('#projInput').onchange = async (e) => {
 };
 function resetCaches() {
   blobCache.clear(); cropCache.clear(); refBoxCache.clear();
+  setup.epoch=(setup.epoch||0)+1;setup.source=null;
   setup.stIdx = 0; setup.page = 0; setup.bmpKey = ''; setup.selId = null;
   grade.qid = null; grade.focus = 0; grade.order = [];
   ck.idx = 0;
@@ -1288,28 +1275,19 @@ async function openTest(id) {
   toast(`「${S.name}」を開きました`);
 }
 async function deleteTest(id) {
-  const t = TESTS.list.find((x) => x.id === id); if (!t) return;
-  if (!confirm(`「${t.name}」の答案画像・採点結果をすべて削除します。元に戻せません。よろしいですか？`)) return;
-  await flushSave();
-  const st = id === S.id ? S : await DB.get('kv', 'test:' + id);
-  // ほかのテストが同じ画像を使っていないか確かめてから消す
-  const used = new Set();
-  for (const o of TESTS.list) {
-    if (o.id === id) continue;
-    const os = o.id === S.id ? S : await DB.get('kv', 'test:' + o.id);
-    for (const pg of [...(os?.pages || []), ...(os?.template?.pages || [])]) used.add(pg.id);
-  }
-  for (const pg of [...(st?.pages || []), ...(st?.template?.pages || [])]) if (!used.has(pg.id)) await DB.del('blobs', pg.id);
-  await DB.del('kv', 'test:' + id);
-  TESTS.list = TESTS.list.filter((x) => x.id !== id);
-  await DB.put('kv', 'tests', TESTS.list);
-  if (id === S.id) {
-    const next = [...TESTS.list].sort((a, b) => b.updated - a.updated)[0];
-    const ns = next ? await DB.get('kv', 'test:' + next.id) : null;
-    S = ns ? Object.assign(newState(), ns) : newState();
-    resetCaches(); await writeNow(); renderAll();
-  } else renderTestList();
-  toast('削除しました');
+  const entry=TESTS.list.find(t=>t.id===id);if(!entry||!confirm(`「${entry.name}」の答案画像・採点結果をすべて削除します。元に戻せません。よろしいですか？`))return;
+  try {
+    await flushSave();const remaining=TESTS.list.filter(t=>t.id!==id),used=new Set();
+    for(const t of remaining){const state=t.id===S.id?S:await DB.get('kv','test:'+t.id);for(const p of backupPages(state||{pages:[]}))used.add(p.id);}
+    let nextState=S;
+    if(id===S.id){const latest=[...remaining].sort((a,b)=>b.updated-a.updated)[0];nextState=latest?Object.assign(newState(),await DB.get('kv','test:'+latest.id)):newState();if(!latest)remaining.push({id:nextState.id,name:nextState.name,grade:nextState.grade||'',updated:Date.now(),students:0});}
+    await new Promise((resolve,reject)=>{const tx=DB.db.transaction(['kv','blobs'],'readwrite'),kv=tx.objectStore('kv'),blobs=tx.objectStore('blobs');
+      kv.delete('test:'+id);kv.put(remaining,'tests');kv.put(nextState.id,'cur');if(id===S.id)kv.put(nextState,'test:'+nextState.id);
+      const cursor=blobs.openCursor();cursor.onsuccess=()=>{const c=cursor.result;if(!c)return;if(!used.has(c.key))c.delete();c.continue()};
+      tx.oncomplete=resolve;tx.onerror=tx.onabort=()=>reject(tx.error||Error('削除を中断しました'));
+    });
+    TESTS.list=remaining;S=nextState;resetCaches();renderAll();renderTestList();toast('テストと不要な画像を削除しました');
+  }catch(e){alert('削除できませんでした。元のデータを保持しています：'+e.message);}
 }
 function renderTestList() {
   renderSwitch();
@@ -1403,22 +1381,31 @@ $('#testList').onclick = (e) => {
 const setup = { stIdx: 0, page: 0, bmp: null, bmpKey: '', scale: 1, selId: null, drag: null };
 const cv = $('#setupCanvas');
 async function renderSetup() {
-  const stSel = $('#setupStudent'), pgSel = $('#setupPage');
-  stSel.innerHTML = S.students.map((s, i) => `<option value="${i}">${esc(s.no)} ${esc(s.name)}</option>`).join('');
-  setup.stIdx = Math.min(setup.stIdx, Math.max(0, S.students.length - 1));
-  stSel.value = setup.stIdx;
-  pgSel.innerHTML = Array.from({ length: S.pagesPerStudent }, (_, i) => `<option value="${i}">${i + 1}ページ目</option>`).join('');
-  setup.page = Math.min(setup.page, S.pagesPerStudent - 1);
-  pgSel.value = setup.page;
-  $('#padInput').value = S.pad;
-  renderRegionList();
-  const st = S.students[setup.stIdx];
-  if (!st) { cv.width = 600; cv.height = 200; const c = cv.getContext('2d'); c.fillStyle = '#888'; c.font = '16px sans-serif'; c.fillText('先に①で答案PDFを読み込んでください', 20, 100); return; }
-  const pid = st.pageIds[setup.page];
-  if (setup.bmpKey !== pid) {
-    setup.bmp?.close?.();
-    setup.bmp = await pageBitmap(pid); setup.bmpKey = pid;
+  webTools?.refresh();
+  const epoch=(setup.epoch||0)+1;setup.epoch=epoch;
+  const stSel=$('#setupStudent'), pgSel=$('#setupPage');
+  const choices=[...(S.template?[{value:'template',label:'白紙の解答用紙',pages:S.template.pages}]:[]),...(S.key?[{value:'key',label:'模範解答',pages:S.key.pages}]:[]),...S.students.map((st,i)=>({value:'student:'+i,label:'答案：'+st.no+' '+st.name,pages:st.pageIds.map(id=>S.pages.find(p=>p.id===id))}))];
+  let source=choices.find(c=>c.value===setup.source)||choices[0];setup.source=source?.value;
+  stSel.innerHTML=choices.map(c=>`<option value="${esc(c.value)}">${esc(c.label)}</option>`).join('');stSel.value=setup.source||'';
+  const pages=source?.pages||[];setup.page=Math.max(0,Math.min(setup.page,pages.length-1));
+  pgSel.innerHTML=pages.map((_,i)=>`<option value="${i}">${i+1}ページ目</option>`).join('');pgSel.value=setup.page;
+  $('#padInput').value=S.pad;renderRegionList();
+  const pid=pages[setup.page]?.id;
+  if(!pid){setup.bmp?.close?.();setup.bmp=null;setup.bmpKey='';cv.width=600;cv.height=200;const c=cv.getContext('2d');c.fillStyle='#888';c.font='16px sans-serif';c.fillText('①で答案・白紙・模範解答のPDFを読み込んでください',20,100);return;}
+  const ref=S.students[0]?.pageIds[setup.page];
+  const cacheKey=pid+'|'+(ref||'');
+  if(setup.bmpKey!==cacheKey){
+    let bmp=await pageBitmap(pid);
+    setup.sourceCompatible=true;
+    if(ref&&ref!==pid&&!setup.source.startsWith('student:')){
+      const reference=await pageBitmap(ref);setup.sourceCompatible=Math.abs(reference.width/reference.height-bmp.width/bmp.height)<.1;
+      const T=setup.sourceCompatible?fitTransform(detectOnBitmap(reference,setup.page),detectOnBitmap(bmp,setup.page)):null;
+      if(T){const c=document.createElement('canvas');c.width=reference.width;c.height=reference.height;const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(bmp,-T.bx/T.ax*c.width,-T.by/T.ay*c.height,c.width/T.ax,c.height/T.ay);bmp.close();bmp=await createImageBitmap(c)}reference.close();
+    }
+    if(epoch!==setup.epoch){bmp.close();return;}
+    setup.bmp?.close?.();setup.bmp=bmp;setup.bmpKey=cacheKey;
   }
+  let notice=$('#webSourceWarning');if(!notice){notice=document.createElement('p');notice.id='webSourceWarning';cv.before(notice)}notice.textContent=setup.sourceCompatible===false?'この用紙と答案の縦横比が違います。答案も同じページ形式で取り込んでから、解答欄を設定してください。':'';
   drawSetup();
 }
 function drawSetup() {
@@ -1505,6 +1492,7 @@ function hitRegion(p) {
   return null;
 }
 cv.addEventListener('mousedown', (e) => {
+  if(setup.sourceCompatible===false)return toast('答案と用紙を同じページ形式で取り込んでください');
   if (!setup.bmp) return;
   const p = evtPos(e);
   if (num.on) {
@@ -1582,6 +1570,7 @@ window.addEventListener('keydown', (e) => {
 function deleteRegion(id) {
   S.regions = S.regions.filter((r) => r.id !== id);
   for (const sid in S.scores) delete S.scores[sid][id];
+  S.checked={};S.scoreJournal={past:[],future:[]};
   if (setup.selId === id) setup.selId = null;
   save(); renderRegionList(); drawSetup();
 }
@@ -1635,7 +1624,10 @@ $('#regionList').addEventListener('change', (e) => {
   if (f === 'type' && (v === 'name' || v === 'total') && S.regions.some((x) => x !== r && x.type === v)) {
     alert(`「${TYPE_LABEL[v]}」の枠はすでにあります。`); e.target.value = r.type; return;
   }
-  r[f] = v;
+  if(f==='max'){if(!changeMax(r,v)){e.target.value=r.max;return;}}
+  else if(f==='type'&&r.type==='q'&&S.students.some(st=>getScore(st.id,r.id))){e.target.value=r.type;return toast('採点済み・コメント付きの問題は種類を変更できません。',6000);}
+  else r[f]=v;
+  S.checked={};
   if (f === 'type') {
     r.label ??= ''; r.max ??= 1; r.kanten ??= '知'; r.answer ??= '';
     if (v === 'q' && !r.label) r.label = `問${questions().length}`;
@@ -1683,7 +1675,7 @@ function numStart() {
 function numAssign(r) {
   num.hist.push({ id: r.id, prev: { dai: r.dai, sho: r.sho, label: r.label, max: r.max }, dai: num.dai, sho: num.sho });
   r.dai = num.dai; r.sho = num.sho; r.label = autoLabel(num.dai, num.sho);
-  const mx = $('#numMax').value; if (mx !== '') r.max = Math.max(0, parseFloat(mx) || 0);
+  const mx = $('#numMax').value; if (mx !== '') changeMax(r,Number(mx));
   num.done = num.done.filter((id) => id !== r.id); num.done.push(r.id);
   num.sho = nextSho(num.sho) || num.sho;
   setup.selId = r.id;
@@ -1692,6 +1684,7 @@ function numAssign(r) {
 function numUndo() {
   const h = num.hist.pop(); if (!h) return;
   const r = S.regions.find((x) => x.id === h.id);
+  if(r&&h.prev.max!=null&&!changeMax(r,h.prev.max)){num.hist.push(h);return;}
   if (r) { for (const k of ['dai', 'sho', 'label', 'max']) { if (h.prev[k] === undefined) delete r[k]; else r[k] = h.prev[k]; } }
   num.done = num.done.filter((id) => id !== h.id);
   num.dai = h.dai; num.sho = h.sho;
@@ -1805,7 +1798,7 @@ function bulkSum() {
 }
 function bulkSet(q, f, v) {
   if (f === 'dai' || f === 'sho') setDaiSho(q, f, v);
-  else if (f === 'max') q.max = Math.max(0, parseFloat(String(v).replace(/[０-９．]/g, (c) => c === '．' ? '.' : String.fromCharCode(c.charCodeAt(0) - 0xFEE0))) || 0);
+  else if (f === 'max') changeMax(q,Number(String(v).replace(/[０-９．]/g,c=>c==='．'?'.':String.fromCharCode(c.charCodeAt(0)-0xFEE0))));
   else if (f === 'kanten') { const k = toKanten(v); if (k) q.kanten = k; }
   else q[f] = v;
 }
@@ -1951,7 +1944,7 @@ $('#bulkRenumber').onclick = () => {
     drawSetup();
   });
 })();
-$('#setupStudent').onchange = (e) => { setup.stIdx = +e.target.value; renderSetup(); };
+$('#setupStudent').onchange = (e) => { setup.source=e.target.value; if(setup.source.startsWith('student:'))setup.stIdx=+setup.source.split(':')[1]; setup.bmpKey='';renderSetup(); };
 $('#setupPage').onchange = (e) => { setup.page = +e.target.value; renderSetup(); };
 $('#btnRenumber').onclick = () => {
   const qs = regionQs().filter((q) => String(q.dai ?? '').trim() !== '');
@@ -2004,9 +1997,11 @@ $('#tplImportFile').onclick = () => $('#tplFile').click();
 $('#tplFile').onchange = async (e) => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
   try {
+    if(f.size>5*1024*1024)throw new Error('テンプレートは5MB以下にしてください');
     const t = JSON.parse(await f.text());
+    validateTemplate(t);
     if (!Array.isArray(t.regions)) throw new Error('テンプレートのファイルではありません');
-    validateBackupState({pages:[],students:[],regions:t.regions,scores:{}});
+    validateBackupState({pages:[],students:[],regions:t.regions,scores:{}},{templateOnly:true});
     t.id = uid(); const list = await tplLib(); list.unshift(t); await tplLibSave(list); renderTplLib(); toast('テンプレートを追加しました');
   } catch (err) { alert('読み込めませんでした: ' + err.message); }
 };
@@ -2016,17 +2011,23 @@ $('#tplList').addEventListener('click', async (e) => {
   if (b.dataset.a === 'del') { if (!confirm(`「${t.name}」を削除しますか？`)) return; list.splice(i, 1); await tplLibSave(list); renderTplLib(); return; }
   if (b.dataset.a === 'export') { download(new Blob([JSON.stringify(t)], { type: 'application/json' }), `${t.name}_テンプレート.json`); return; }
   // 呼び出し
+  try{validateTemplate(t)}catch(e){return alert(e.message)}
+  if(S.students.length&&t.pps!==S.pagesPerStudent)return toast('答案と同じページ数のテンプレートを使用してください。',7000);
   if (t.pps !== S.pagesPerStudent && !confirm(`このテンプレートは1人${t.pps}ページですが、今の設定は${S.pagesPerStudent}ページです。続けますか？`)) return;
   const replace = !S.regions.length || confirm('今の枠をすべて置き換えますか？\n（「キャンセル」で今の枠に追加します）');
+  if(replace&&Object.values(S.scores).some(row=>Object.keys(row).length)&&!confirm('枠を置き換えると、入力済みの採点結果・答案コメントは消えます。先にバックアップを保存してください。続けますか？'))return;
   busy('今の答案に位置を合わせています…');
   try {
+    if(!S.students.length)S.pagesPerStudent=t.pps;
     const now = S.students.length ? await refBoxesAll() : [];
     const Ts = Array.from({ length: Math.max(t.pps, S.pagesPerStudent) }, (_, p) => (t.refBoxes?.[p]?.length && now[p]?.length ? fitTransform(t.refBoxes[p], now[p]) : null));
     if (replace) { S.regions = []; for (const sid in S.scores) S.scores[sid] = {}; }
+    const mappedIds=new Map(t.regions.map(r=>[r.id,uid()]));
     for (const r of t.regions) {
-      const T = Ts[r.page];
-      S.regions.push({ ...JSON.parse(JSON.stringify(r)), ...(T ? mapR(r, T) : {}), id: uid() });
+      const T = Ts[r.page],of=r.of?.startsWith('q:')?'q:'+mappedIds.get(r.of.slice(2)):r.of;
+      S.regions.push({ ...JSON.parse(JSON.stringify(r)), ...(T ? mapR(r, T) : {}), id:mappedIds.get(r.id),...(of?{of}:{}) });
     }
+    S.checked={};S.scoreJournal={past:[],future:[]};
     if (t.pad != null) S.pad = t.pad;
   } finally { busy(null); }
   cropCache.clear(); save(); $('#tplLibDlg').close(); renderSetup();
@@ -2694,7 +2695,7 @@ function inkRatio(bmp, r, hide = []) {
 // 1ページ分の候補と文字を用意する
 async function detectPage(p) {
   const st = S.students[0]; // 位置の基準は1人目の答案
-  const scanBmp = await pageBitmap(st.pageIds[p]);
+  const scanBmp = await pageBitmap(st?.pageIds[p] || S.template?.pages[p]?.id || S.key?.pages[p]?.id);
   const opt = detOpts();
   let cands = detectOnBitmap(scanBmp, p, opt);
   const tp = S.template?.pages?.[p];
@@ -2777,11 +2778,11 @@ function openAreas(cands, texts, asp, p) {
 }
 
 $('#btnDetect').onclick = async () => {
-  if (!S.students.length) return toast('先に①で答案PDFを読み込んでください');
+  if (!S.students.length && !S.template && !S.key) return toast('先に①でPDFを読み込んでください');
   const pages = [];
   setup.texts = {};
   const useOcr = !S.template && $('#ocrToggle').checked;
-  const pg0 = S.pages[0], asp = pg0 ? pg0.h / pg0.w : 1.414;
+  const pg0 = S.pages[0] || S.template?.pages[0] || S.key?.pages[0], asp = pg0 ? pg0.h / pg0.w : 1.414;
   try {
     for (let p = 0; p < S.pagesPerStudent; p++) {
       busy('枠を探しています…', `${p + 1} / ${S.pagesPerStudent} ページ`);
@@ -2950,37 +2951,10 @@ $('#qList').onclick = (e) => {
 };
 // ───── 模範解答 ─────
 // S.key = { name, pages:[{id,w,h}], align:{ページ番号: 変換} }。位置は1人目の答案に合わせる
-async function importKey(file) {
-  const lib = await getPdfjs();
-  try {
-    const task = lib.getDocument({ data: await file.arrayBuffer(), ...PDFJS_OPTS });
-    const pdf = await task.promise;
-    const n = Math.min(pdf.numPages, S.pagesPerStudent);
-    const pages = [];
-    for (let i = 1; i <= n; i++) {
-      busy('模範解答を読み込み中…', `${i} / ${n} ページ`);
-      const page = await pdf.getPage(i);
-      const { blob, w, h } = await renderPdfPage(page);
-      const id = uid();
-      await DB.put('blobs', id, blob); blobCache.set(id, blob);
-      pages.push({ id, w, h });
-      page.cleanup();
-    }
-    await task.destroy();
-    await clearKey(true);
-    S.key = { name: file.name, pages, align: {} };
-    keyCache.clear(); save();
-    toast(`模範解答（${pages.length}ページ）を読み込みました` + (pdf.numPages > n ? `。1人分（${n}ページ）だけ使います` : ''));
-  } catch (e) {
-    alert('読み込みに失敗しました: ' + e.message);
-  } finally { busy(null); }
-  renderImport();
-}
+async function importKey(file) { return importReference(file,'key'); }
 async function clearKey(quiet) {
-  // 答案から作った模範解答は、答案と同じ画像を使っているので消さない
-  const own = new Set(S.pages.map((p) => p.id));
-  for (const pg of S.key?.pages || []) if (!own.has(pg.id)) { await DB.del('blobs', pg.id); blobCache.delete(pg.id); }
   S.key = null; keyCache.clear();
+  // Images are retained until atomic test deletion, preventing loss if a later save fails.
   if (!quiet) { save(); renderImport(); }
 }
 const keyCache = new Map();
@@ -3050,6 +3024,7 @@ $('#btnKeyFromSt').onclick = async () => {
   toast('模範解答に設定しました。③採点の「📘 模範解答」で表示できます', 4000);
 };
 async function renderGrade() {
+  webTools?.refresh();
   renderQList();
   const q = curQ();
   if (q && S.students.length > 1 && S.students.some((st) => st.pageIds[q.page] && !alignOf(st.pageIds[q.page])) && S.students[0].pageIds[q.page]) {
@@ -3072,7 +3047,7 @@ async function renderGrade() {
   grade.focus = clamp(grade.focus, 0, grade.order.length - 1);
   const tileHtml = (st, k) => `<div class="tile" data-k="${k}" data-sid="${st.id}">
       <img alt=""><div class="mk"></div><div class="ai"></div>
-      <div class="ft"><span>${esc(st.no)} ${esc(st.name)}</span><span><span class="score"></span> <button class="zoom ext" title="この生徒だけ枠を広げる（はみ出して書いたとき）">⤢</button><button class="zoom" title="答案全体を見る">🔍</button></span></div></div>`;
+      <div class="ft"><span>${esc(st.no)} ${esc(st.name)}</span><span><span class="score"></span> <button class="zoom note" title="コメント・あとで確認">💬</button><button class="zoom ext" title="この生徒だけ枠を広げる（はみ出して書いたとき）">⤢</button><button class="zoom" title="答案全体を見る">🔍</button></span></div></div>`;
   grid.innerHTML = grade.order.map((st, k) => tileHtml(st, k)).join('');
   updateGroupHeads();
   grade.order.forEach((st, k) => updateTile(k));
@@ -3083,6 +3058,7 @@ async function renderGrade() {
     t.querySelector('img').src = cropCache.get(cropKey(st, q)) || '';
     t.classList.toggle('wide', !!extOf(st, q));
   });
+  webTools?.refresh();
   // 他の問題の切り抜きも裏で用意しておく
   ensureCrops(questions());
 }
@@ -3217,6 +3193,7 @@ function setFocus(k) {
   const old = grade.focus;
   grade.focus = clamp(k, 0, grade.order.length - 1);
   updateTile(old); updateTile(grade.focus);
+  webTools?.refresh();
   document.querySelector(`#grid .tile[data-k="${grade.focus}"]`)?.scrollIntoView({ block: 'nearest' });
 }
 function scoreFocused(s, advance = true) {
@@ -3230,6 +3207,7 @@ $('#grid').addEventListener('click', (e) => {
   const t = e.target.closest('.tile'); if (!t) return;
   const k = +t.dataset.k; const q = curQ(); const st = grade.order[k];
   setFocus(k);
+  if (e.target.closest('.note')) return webTools.answerDialog(st,q);
   if (e.target.closest('.ext')) return openExt(st, q);
   if (e.target.closest('.zoom')) return openPage(st, q.page);
   const m = markOf(q, getScore(st.id, q.id));
@@ -3256,7 +3234,8 @@ $('#grid').addEventListener('keydown', (e) => {
 function bulk(val) {
   const q = curQ(); if (!q) return;
   let n = 0;
-  for (const st of S.students) if (getScore(st.id, q.id)?.s == null) { setScore(st.id, q.id, val); n++; }
+  webTools?.history.begin('未採点を一括採点');
+  try { for (const st of S.students) if (getScore(st.id, q.id)?.s == null) { setScore(st.id, q.id, val); n++; } } finally { webTools?.history.end();webTools?.refresh(); }
   grade.order.forEach((_, k) => updateTile(k)); renderQList();
   toast(`${n}人分を${val ? '○' : '×'}にしました`);
 }
@@ -3518,17 +3497,14 @@ const aiLayout = createAILayout({getState:()=>S,loadBitmap:pageBitmap,toast,onAp
 // 生徒ごとに答案全体（○×・部分点の書き込み済み）を見て、確認済みにしていく。S.checked[生徒ID] = 確認した時刻
 const ck = { idx: 0 };
 function ckIssues(st) {
-  let un = 0, ai = 0;
+  let un = 0, ai = 0, review = 0;
   for (const q of questions()) {
     const sc = getScore(st.id, q.id);
     if (sc?.s == null) un++;
     if (disagree(q, sc)) ai++;
+    if (sc?.review) review++;
   }
-  return { un, ai };
-}
-function ckVisible() {
-  const f = $('#ckFilter').value;
-  return S.students.filter((st) => f === 'all' ? true : f === 'todo' ? !S.checked?.[st.id] : (() => { const i = ckIssues(st); return i.un || i.ai; })());
+  return { un, ai, review };
 }
 function renderCheckSide() {
   const all = S.students, qs = questions();
@@ -3541,14 +3517,14 @@ function renderCheckSide() {
     ${ai ? `<div class="warn">AIと判定が違う欄：${ai}</div>` : ''}
     ${noName ? `<div class="warn">氏名が未入力：${noName}人</div>` : ''}
     ${all.length && done === all.length && !un ? `<div class="good">すべて確認しました</div><button id="ckToSummary" class="primary">⑤ 集計・出力へ</button>` : ''}`;
-  const vis = ckVisible();
+  const vis = S.students; // 全員を登録名簿順で表示。採点状態で抽出しない。
   const cur = S.students[ck.idx];
   $('#ckList').innerHTML = vis.length ? vis.map((st) => {
     const i = ckIssues(st), t = studentTotals(st).total;
     return `<div class="st${st === cur ? ' sel' : ''}" data-i="${S.students.indexOf(st)}">
       <span class="nm">${esc(st.no)} ${esc(st.name || '（氏名なし）')}</span>
       <span class="muted">${t}点</span>
-      ${i.un ? `<span class="tag">未${i.un}</span>` : ''}${i.ai ? `<span class="tag ai">AI${i.ai}</span>` : ''}
+      ${i.review ? `<span class="tag">要確認${i.review}</span>` : ''}${i.un ? `<span class="tag">未${i.un}</span>` : ''}${i.ai ? `<span class="tag ai">AI${i.ai}</span>` : ''}
       ${S.checked?.[st.id] ? '<span class="done">✓</span>' : ''}</div>`;
   }).join('') : '<p class="muted" style="padding:12px">該当する生徒はいません。</p>';
   if (!qs.length) $('#ckList').innerHTML = '<p class="muted" style="padding:12px">②で解答欄を設定してください。</p>';
@@ -3578,12 +3554,13 @@ function renderCheckScores() {
     const head = multi && q.dai !== lastDai ? `<tr class="dai"><td colspan="3">大問${esc(q.dai)}</td></tr>` : '';
     lastDai = q.dai;
     return head + `<tr data-q="${q.id}"${sc == null ? ' class="un"' : ''}><td class="n">${esc(q.label || '')}</td>
-      <td><input type="number" min="0" max="${q.max}" step="0.5" value="${sc ?? ''}" placeholder="未" data-q="${q.id}"></td><td class="muted">/ ${q.max}</td></tr>`;
+      <td><input type="number" min="0" max="${q.max}" step="0.5" value="${sc ?? ''}" placeholder="未" data-q="${q.id}"></td><td class="muted">/ ${q.max}<button type="button" data-note="${q.id}" title="コメント・あとで確認">${getScore(st.id,q.id)?.review?'⚑':'💬'}</button></td></tr>`;
   }).join('');
   const t = studentTotals(st);
   box.innerHTML = `<b>点数</b><p class="help" style="margin:2px 0 6px">入力するとすぐ反映されます（空欄＝未採点）。<kbd>Enter</kbd>で次の欄へ。</p>
     <table>${rows}</table><div class="tot">合計 ${t.total} / ${maxTotal()}点</div>`;
 }
+$('#ckScores').addEventListener('click',e=>{const n=e.target.closest('[data-note]');if(n)webTools.answerDialog(S.students[ck.idx],S.regions.find(q=>q.id===n.dataset.note))});
 $('#ckScores').addEventListener('change', async (e) => {
   const inp = e.target.closest('input[data-q]'); const st = S.students[ck.idx]; if (!inp || !st) return;
   const q = questions().find((x) => x.id === inp.dataset.q); if (!q) return;
@@ -3634,17 +3611,10 @@ function ckGo(i) {
   hideMarkPop(); ck.idx = i; renderCheckSide(); renderCheckSheet();
   $('#ckList .st.sel')?.scrollIntoView({ block: 'nearest' });
 }
-function ckNextIssue() {
-  const n = S.students.length;
-  for (let k = 1; k <= n; k++) {
-    const i = (ck.idx + k) % n, st = S.students[i], is = ckIssues(st);
-    if (is.un || is.ai || !S.checked?.[st.id]) return ckGo(i);
-  }
-  toast('確認が必要な生徒はいません');
-}
 function ckOk() {
   const st = S.students[ck.idx]; if (!st) return;
   const is = ckIssues(st);
+  if(is.review)return toast('「あとで確認」が残っています。各小問のコメントから確認フラグを外してください。',6000);
   if (is.un && !confirm(`未採点の欄が${is.un}つあります。このまま確認済みにしますか？`)) return;
   S.checked ??= {};
   S.checked[st.id] = Date.now(); save();
@@ -3654,8 +3624,6 @@ function ckOk() {
 $('#ckPrev').onclick = () => ckGo(ck.idx - 1);
 $('#ckNext').onclick = () => ckGo(ck.idx + 1);
 $('#ckOk').onclick = ckOk;
-$('#ckNextIssue').onclick = ckNextIssue;
-$('#ckFilter').onchange = () => renderCheckSide();
 $('#ckList').onclick = (e) => { const r = e.target.closest('.st'); if (r) ckGo(+r.dataset.i); };
 $('#ckSummary').onclick = (e) => { if (e.target.id === 'ckToSummary') showView('summary'); };
 $('#ckPages').addEventListener('pointerdown', (e) => {
@@ -3699,6 +3667,7 @@ const pct = (v, m) => (m ? Math.round((v / m) * 100) : 0);
 const kMaxOf = (k) => questions().filter((q) => q.kanten === k).reduce((a, q) => a + (+q.max || 0), 0);
 
 function renderSummary() {
+  webTools?.refresh();
   renderClsFilter();
   const qs = questions(), ks = usedKanten(), ds = daiList();
   const tb = $('#sumTable');
@@ -3819,8 +3788,19 @@ $('#diffList').addEventListener('click', async (e) => {
   if (k >= 0) setFocus(k);
 });
 
+function confirmOutput() {
+  const qs=questions(),sts=viewStudents();let un=0,review=0,bad=0;
+  for(const st of sts)for(const q of qs){const sc=getScore(st.id,q.id);if(sc?.s==null)un++;else if(!Number.isFinite(sc.s)||sc.s<0||sc.s>q.max)bad++;if(sc?.review)review++;}
+  if(bad){toast('範囲外の点数があります。採点を修正してから出力してください。',8000);return false;}
+  if(review){toast('「あとで確認」が残っています。④で確認してフラグを外してから出力してください。',8000);return false;}
+  const issues=auditPoints(S).issues,unchecked=sts.filter(st=>!S.checked?.[st.id]).length;
+  if(un||issues.length||unchecked)return confirm(`未採点 ${un}欄・配点などの要確認 ${issues.length}件・最終確認前 ${unchecked}人があります。未採点は集計上0点として扱われます。成績処理・返却の前に確認してください。下書きとして出力しますか？`);
+  return true;
+}
+
 // ───── Excel・CSV ─────
 $('#btnXlsx').onclick = () => {
+  if(!confirmOutput())return;
   const qs = questions(), ks = usedKanten(), ds = daiList(), sts = viewStudents();
   if (!qs.length) return toast('問題がありません');
   const head = ['クラス', '番号', '氏名', ...qs.map((q) => `${q.label}(${q.max})`), ...ds.map((d) => `大問${d}(${daiMax(d)})`), ...ks.map((k) => `${k.name}`), `合計(${maxTotal()})`, 'コメント'];
@@ -3847,9 +3827,10 @@ $('#btnXlsx').onclick = () => {
 };
 // 採点集計システム（生徒名, 問題… の形式）用
 $('#btnCsvTally').onclick = () => {
+  if(!confirmOutput())return;
   const qs = questions(), sts = viewStudents();
   if (!qs.length) return toast('問題がありません');
-  const cell = (v) => { const t = String(v ?? ''); return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+  const cell=(v)=>{let t=String(v??'');if(/^(?:\s*[=+\-@]|[\t\r\n])/.test(t))t="'"+t;return '"'+t.replace(/"/g,'""')+'"';};
   const lines = [['生徒名', ...qs.map((q) => q.label)].map(cell).join(',')];
   for (const st of sts) lines.push([st.name || `${st.cls || ''}${st.no}番`, ...qs.map((q) => getScore(st.id, q.id)?.s ?? '')].map(cell).join(','));
   download(new Blob(['﻿' + lines.join('\n') + '\n'], { type: 'text/csv;charset=utf-8' }), `${safeName()}_採点集計システム用.csv`);
@@ -3857,10 +3838,10 @@ $('#btnCsvTally').onclick = () => {
 };
 // 様式を指定してExcel
 function exportColumns() {
-  const cols = { 'クラス': (st) => st.cls || '', '番号': (st) => (isNaN(+st.no) ? st.no : +st.no), '氏名': (st) => st.name, '合計': (st) => studentTotals(st).total, 'コメント': (st) => S.comments?.[st.id] || '' };
+  const cols = Object.assign(Object.create(null),{ 'クラス': (st) => st.cls || '', '番号': (st) => (isNaN(+st.no) ? st.no : +st.no), '氏名': (st) => st.name, '合計': (st) => studentTotals(st).total, 'コメント': (st) => S.comments?.[st.id] || '' });
   for (const k of KANTEN) { cols[k.key] = (st) => studentTotals(st).kanten[k.key] || 0; cols[k.name] = cols[k.key]; }
   for (const d of daiList()) cols[`大問${d}`] = (st) => studentTotals(st).dai[d] || 0;
-  for (const q of questions()) cols[q.label] = (st, zero) => getScore(st.id, q.id)?.s ?? (zero ? 0 : '');
+  for(const q of questions()){let name=q.label;if(Object.hasOwn(cols,name))name='問題:'+name;while(Object.hasOwn(cols,name))name+=':'+q.id;cols[name]=(st,zero)=>getScore(st.id,q.id)?.s??(zero?0:'');}
   return cols;
 }
 $('#btnCustomXlsx').onclick = () => {
@@ -3871,9 +3852,10 @@ $('#btnCustomXlsx').onclick = () => {
 };
 $('#exportCancel').onclick = () => $('#exportDlg').close();
 $('#exportOk').onclick = () => {
+  if(!confirmOutput())return;
   const cols = exportColumns();
   const want = $('#exportCols').value.split(/[,、\n]/).map((t) => t.trim()).filter(Boolean);
-  const bad = want.filter((w) => !cols[w]);
+  const bad = want.filter(w=>typeof cols[w]!=='function');
   if (bad.length) return alert('次の列は見つかりません：' + bad.join('、'));
   S.exportCols = want.join(','); save();
   const zero = $('#exportBlankZero').checked;
@@ -4126,7 +4108,9 @@ function printDoc(title, body) {
     td .kb{font-size:11px;margin:0 4px 0 0} .kl{font-size:11px;margin:0 0 3px} .kl .kb{font-size:10px;margin:0 3px 0 0}
     .note{font-size:11px;color:#555;margin:0 0 4px}
     .cm{border:1px solid #aaa;min-height:60px;padding:8px;font-size:14px;white-space:pre-wrap}
-  </style></head><body>${body}<script>
+  </style><link rel="stylesheet" href="./web-tools.css">
+<link rel="canonical" href="https://zoemon-lab.github.io/kirimaru/">
+</head><body>${body}<script>
     // 個票が1枚に入りきらないときは、その人の分だけ縮小する（少し余裕をもたせる）
     for (const s of document.querySelectorAll('.slip')) {
       const inn = s.firstElementChild, h = s.clientHeight - parseFloat(getComputedStyle(s).paddingTop) * 2;
@@ -4142,6 +4126,7 @@ function printOut(html) {
   fr.srcdoc = html;
 }
 $('#btnSlips').onclick = async () => {
+  if(!confirmOutput())return;
   const sts = viewStudents();
   if (!sts.length || !questions().length) return toast('データがありません');
   printOut(printDoc('個票', slipSections(sts, await slipHistData()).join('')));
@@ -4187,6 +4172,7 @@ function frontImage(canvases) {
   return out.toDataURL('image/jpeg', 0.8);
 }
 $('#btnCombo').onclick = async () => {
+  if(!confirmOutput())return;
   const sts = viewStudents();
   if (!sts.length || !questions().length) return toast('データがありません');
   try {
@@ -4210,6 +4196,7 @@ $('#btnCombo').onclick = async () => {
   } catch (e) { busy(null); alert('作成に失敗しました: ' + e.message); }
 };
 $('#btnReturnPdf').onclick = async () => {
+  if(!confirmOutput())return;
   if (!S.students.length) return;
   const { jsPDF } = window.jspdf;
   let doc = null;
@@ -4239,6 +4226,7 @@ $('#btnReturnPdf').onclick = async () => {
 function showView(v) {
   document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.v === v));
   document.querySelectorAll('section.view').forEach((s) => s.classList.toggle('active', s.id === 'view-' + v));
+  webTools?.refresh();
   if (v === 'import') renderImport();
   if (v === 'setup') renderSetup();
   if (v === 'grade') { renderGrade(); setTimeout(() => $('#grid').focus({ preventScroll: true }), 0); }
@@ -4251,7 +4239,17 @@ function renderAll() {
   showView(active);
 }
 
+webTools=createWebTools({
+  state:()=>S,save,toast,busy,download,getPdfjs,pdfOptions:PDFJS_OPTS,readText:readPdfTextContent,renderPdfPage,
+  question:curQ,student:()=>grade.order[grade.focus],view:showView,redraw:renderAll,score:(v)=>scoreFocused(v),reference:(kind,f)=>importReference(f,kind),
+  meta:(sid,rid,data)=>{S.scores[sid]??={};const old=S.scores[sid][rid],next={...(old||{}),...data};webTools.history.record(sid,rid,old,next,S.checked?.[sid]);S.scores[sid][rid]=next;if(S.checked)delete S.checked[sid];save();}
+});
+
 (async () => {
+  if(!await acquireEditorLock()){
+    const overlay=document.createElement('div');overlay.id='webLocked';overlay.style.cssText='position:fixed;inset:0;background:white;z-index:99999;padding:40px';
+    const title=document.createElement('h1');title.textContent='別のタブでキリマルを使用中です';const msg=document.createElement('p');msg.textContent='同時編集による上書きを防いでいます。ほかのキリマルのタブを閉じてから、この画面を再読み込みしてください。';const reload=document.createElement('button');reload.textContent='再読み込み';reload.onclick=()=>location.reload();overlay.append(title,msg,reload);document.body.append(overlay);return;
+  }
   localStorage.removeItem('sg_apiKey');
   await DB.open();
   // 空き容量が少ないときなどに、ブラウザが保存データを自動で消さないよう頼んでおく
@@ -4273,7 +4271,9 @@ function renderAll() {
   }
   $('#status').textContent = restored ? '前回の作業を復元しました' : '';
   renderAll(); renderTestList();
-  fetch('./release-control.json', { cache: 'no-store' }).then((r) => r.json()).then((c) => { aiLayout.applyControl(c); if (c.stopApp) { aiLayout.suspend(); window.kirimaruStopApp(); } }).catch(() => {});
+  async function refreshReleaseControl(){try{const r=await fetch('./release-control.json',{cache:'no-store'});if(!r.ok)return;const c=await r.json();if(typeof c.stopAI!=='boolean'||typeof c.stopApp!=='boolean')return;aiLayout.applyControl(c);if(c.stopApp){aiLayout.suspend();window.kirimaruStopApp()}}catch{}}
+  refreshReleaseControl();setInterval(()=>{if(document.visibilityState==='visible')refreshReleaseControl()},60000);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshReleaseControl()});
+  document.documentElement.dataset.kirimaruReady='1';window.dispatchEvent(new Event('kirimaru-ready'));
   $('#moveNotice').hidden = true;
   // 初めて開いたときは、注意書きを表示する
   let seen = false; try { seen = localStorage.getItem('aboutSeen') === '1'; } catch {}
