@@ -4,6 +4,8 @@ const object = x => x!==null && typeof x==='object' && !Array.isArray(x);
 export function validateProject(st,{templateOnly=false}={}) {
   let nodes=0;function walk(x,depth=0){if(depth>40||++nodes>1500000)throw Error('バックアップが複雑すぎます');if(x&&typeof x==='object')for(const k of Object.keys(x)){if(['__proto__','prototype','constructor'].includes(k))throw Error('不正なバックアップです');walk(x[k],depth+1)}}walk(st);
   if(!object(st)||!Array.isArray(st.pages)||!Array.isArray(st.students)||!Array.isArray(st.regions)||!object(st.scores))throw Error('バックアップ形式が不正です');
+  if(st.preparedRoster!=null){const r=st.preparedRoster;if(!object(r)||typeof r.grade!=='string'||r.grade.length>1000||!Array.isArray(r.rows)||r.rows.length>20000||r.rows.some(x=>!object(x)||['cls','no','name'].some(k=>typeof x[k]!=='string'||x[k].length>1000)||!x.name.trim()))throw Error('名簿の控えが不正です');}
+  if(st.returnPdf!=null){const p=st.returnPdf;if(!object(p)||(p.paper!=null&&!['a4','a3'].includes(p.paper))||(p.orientation!=null&&!['auto','portrait','landscape'].includes(p.orientation))||(p.layout!=null&&!['original','one'].includes(p.layout)))throw Error('返却PDFの設定が不正です');}
   const pps=templateOnly?8:st.pagesPerStudent;
   if(!Number.isInteger(pps)||pps<1||pps>8||st.pages.length>2000||st.students.length>2000||st.regions.length>5000)throw Error('人数・ページ数・設問数が範囲外です');
   for(const k of ['name','grade','subject','lastCls'])if(st[k]!=null&&(typeof st[k]!=='string'||st[k].length>1000))throw Error('テスト情報が不正です');

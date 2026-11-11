@@ -1,6 +1,6 @@
 /* Web app cache only. Never stores API requests, answers, API keys, or release control. */
-const CACHE = 'kirimaru-web-20261111-audit-legacy-10';
-const SHELL = ['./', './index.html', './web-release.js', './compatibility.js', './legacy-notice.js', './ai-layout.js', './web-tools.js', './tutorial.js', './security.js', './web-tools.css', './privacy.html', './support.html', './licenses.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png', './vendor/xlsx-export.js', './vendor/jspdf@4.2.1/dist/jspdf.umd.min.js', './vendor/pdfjs-dist@6.3.289/legacy/build/pdf.min.mjs', './vendor/pdfjs-dist@6.3.289/legacy/build/pdf.worker.min.mjs'];
+const CACHE = 'kirimaru-web-20261111-audit-legacy-12';
+const SHELL = ['./', './index.html', './web-release.js', './compatibility.js', './legacy-notice.js', './ai-layout.js', './web-tools.js?v=task-guide-1', './tutorial.js', './return-pdf.js', './security.js?v=task-guide-1', './web-tools.css', './privacy.html', './support.html', './licenses.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png', './vendor/xlsx-export.js?v=task-guide-1', './vendor/jspdf@4.2.1/dist/jspdf.umd.min.js', './vendor/pdfjs-dist@6.3.289/legacy/build/pdf.min.mjs', './vendor/pdfjs-dist@6.3.289/legacy/build/pdf.worker.min.mjs'];
 self.addEventListener('install', e => e.waitUntil((async () => { await (await caches.open(CACHE)).addAll(SHELL); await self.skipWaiting(); })()));
 self.addEventListener('activate', e => e.waitUntil((async () => {
   for (const key of await caches.keys()) if (key.startsWith('kirimaru-') && key !== CACHE) await caches.delete(key);
@@ -19,7 +19,7 @@ self.addEventListener('fetch', e => {
     } })()); return;
   }
   // App code is unversioned: revalidate online instead of pinning a stale deploy forever.
-  if (!url.pathname.includes('/vendor/') && SHELL.some(p=>new URL(p,self.registration.scope).pathname===url.pathname)) {
+  if ((!url.pathname.includes('/vendor/')||url.pathname.endsWith('/vendor/xlsx-export.js')) && SHELL.some(p=>new URL(p,self.registration.scope).pathname===url.pathname)) {
     e.respondWith((async()=>{const c=await caches.open(CACHE);try{const r=await fetch(req,{cache:'no-cache'});if(r.ok)await c.put(req,r.clone());return r;}catch{const hit=await c.match(req);if(hit)return hit;return new Response('Offline',{status:503});}})());return;
   }
   // Cache only versioned public assets, never arbitrary same-origin data or error responses.

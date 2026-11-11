@@ -1,3 +1,4 @@
+import {createReturnPDF} from './return-pdf.js';
 import {createTutorial} from './tutorial.js';
 /* Public Web helpers. No AI calls, image sorting or model-answer annotation. */
 export function auditPoints(s) {
@@ -29,6 +30,7 @@ export function createScoreHistory(getState,changed){
 }
 export function createWebTools(b){
   const $=s=>document.querySelector(s), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const returnPDF=createReturnPDF(b);
   const history=createScoreHistory(b.state,()=>{b.save();b.redraw();refresh()});
   const node=(tag,id,parent)=>{const n=document.createElement(tag);n.id=id;parent.append(n);return n};
   const guide=node('div','webGuide',$('#tabs').parentElement);$('#tabs').before(guide);guide.className='web-toolbox';
@@ -59,7 +61,7 @@ export function createWebTools(b){
   function move(redo){try{history.move(redo);refresh()}catch(e){b.toast(e.message,6000)}}
   $('#webUndo').onclick=()=>move(false);$('#webRedo').onclick=()=>move(true);$('#webQuestion').onclick=questionDialog;$('#webAnswer').onclick=()=>answerDialog();
   $('#webHistory').onclick=()=>{const j=history.get();modal(`<h2>採点の変更履歴</h2><p>このテストの直近100操作を保存します。一括採点も1操作として戻せます。戻した後に採点を変更すると、やり直し履歴は消えます。</p><ol>${[...j.past].reverse().map(a=>`<li>${esc(new Date(a.at).toLocaleString('ja-JP'))} ${esc(a.label)}（${a.entries.length}件）</li>`).join('')}</ol>`)};
-  function refresh(){const s=b.state(),a=auditPoints(s),q=b.question(),st=b.student(),sc=st&&q?s.scores[st.id]?.[q.id]:null;
+  function refresh(){returnPDF.refresh();const s=b.state(),a=auditPoints(s),q=b.question(),st=b.student(),sc=st&&q?s.scores[st.id]?.[q.id]:null;
     guide.innerHTML='<span>準備 → 採点 → 確認・出力</span> <button id="webNext" class="primary"></button>';
     const revision=s.changedAt||0,hasWork=!!(s.students.length||s.regions.length||s.template||s.key||s.changedAt);
     const needsBackup=hasWork&&(!s.backupExportedAt||revision>s.backupExportedAt)&&backupDismissed[s.id]!==revision;
@@ -69,8 +71,8 @@ export function createWebTools(b){
     rosterNotice.hidden=!missingNames;
     rosterNotice.innerHTML=missingNames?`<b>名簿の登録を確認してください</b><span> 氏名が未入力の答案が${missingNames}人分あります。採点・返却の前に、氏名と答案の対応を確認してください。</span> <button id="webRosterEntry">氏名を登録する</button> <button id="webRosterPaste">名簿を貼り付ける</button>`:'';
     if(missingNames){$('#webRosterEntry').onclick=()=>openRosterEntry();$('#webRosterPaste').onclick=()=>openRosterEntry(true);}
-    const next=!s.students.length?'import':missingNames?'roster':!a.count?'setup':s.students.some(st=>s.regions.filter(q=>q.type==='q').some(q=>s.scores[st.id]?.[q.id]?.s==null))?'grade':'check';
-    $('#webNext').textContent={import:'答案を取り込む',roster:'名簿を登録する',setup:'解答欄を設定する',grade:'採点を続ける',check:'最終確認へ'}[next];$('#webNext').onclick=()=>next==='roster'?openRosterEntry():b.view(next);
+    const next=!s.students.length?(s.preparedRoster?.rows?.length&&s.preparedRoster.grade===s.grade?'import':'prepareRoster'):missingNames?'roster':!a.count?'setup':s.students.some(st=>s.regions.filter(q=>q.type==='q').some(q=>s.scores[st.id]?.[q.id]?.s==null))?'grade':'check';
+    $('#webNext').textContent={import:'答案を取り込む',prepareRoster:'名簿を先に登録・確認する',roster:'名簿を登録する',setup:'解答欄を設定する',grade:'採点を続ける',check:'最終確認へ'}[next];$('#webNext').onclick=()=>next==='prepareRoster'?$('#btnRoster').click():next==='roster'?openRosterEntry():b.view(next);
     panel.innerHTML=`<details id="webPointDetails"><summary>配点チェック：${a.count}問・合計 ${a.total}点${a.issues.length?' ／ 要確認 '+a.issues.length+'件':''}</summary><label>このテストの満点（任意） <input id="webExpected" type="number" min="0" step="0.5" value="${s.expectedMax??''}"></label><ul>${a.issues.map(t=>`<li>${esc(t)}</li>`).join('')}</ul></details>`;
     $('#webExpected').onchange=e=>{const v=e.target.value.trim();if(v!==''&&(!Number.isFinite(+v)||+v<0))return;e.target.blur();s.expectedMax=v===''?null:+v;b.save();refresh();$('#webPointDetails').open=true};
     backup.textContent=`前回のバックアップ書き出し：${s.backupExportedAt?new Date(s.backupExportedAt).toLocaleString('ja-JP'):'まだありません'}。${!s.backupExportedAt||s.changedAt>s.backupExportedAt?'作業後はファイルにも保存してください。':''} ${storageText} ※ダウンロード先への保存を確認してください。`;
@@ -93,9 +95,9 @@ export function createWebTools(b){
       return {pages:out,joined:selected==='join',name:groups.map(g=>g.name).join('、')};
     }finally{b.busy(null);if(preview.open)preview.close();for(const u of urls)URL.revokeObjectURL(u);preview.replaceChildren();preview.onclose=null;preview.oncancel=null;pending=false}
   }
-  function confirmRestore(s){b.busy(null);return new Promise(resolve=>{modal(`<h2>バックアップの確認</h2><p>テスト：${esc(s.name)} ／ ${s.students.length}人 ／ ${s.regions.filter(q=>q.type==='q').length}問 ／ 答案 ${s.pages.length}ページ</p><p>現在のテストは残し、新しいテストとして追加します。</p><button type="button" id="webRestoreConfirm" class="primary">このバックアップを取り込む</button>`);let done=false;const finish=x=>{if(done)return;done=true;dlg.onclose=null;dlg.close();resolve(x)};dlg.onclose=()=>finish(false);$('#webRestoreConfirm').onclick=()=>finish(true)})}
+  function confirmRestore(s){b.busy(null);return new Promise(resolve=>{modal(`<h2>バックアップの確認</h2><p>テスト：${esc(s.name)} ／ ${s.students.length}人 ／ ${s.regions.filter(q=>q.type==='q').length}問 ／ 答案 ${s.pages.length}ページ</p><p>現在のテストは残し、新しいテストとして追加します。</p>${s.preparedRoster?.rows.length?`<p>名簿の控え：${s.preparedRoster.rows.length}人。学年の共通名簿がない場合、このテストでは控えを使います。共通名簿としても保存する場合は復元後に名簿の編集→保存を行ってください。</p>`:""}<button type="button" id="webRestoreConfirm" class="primary">このバックアップを取り込む</button>`);let done=false;const finish=x=>{if(done)return;done=true;dlg.onclose=null;dlg.close();resolve(x)};dlg.onclose=()=>finish(false);$('#webRestoreConfirm').onclick=()=>finish(true)})}
   for(const [id,kind,input] of [['btnTpl','template','tplInput'],['btnKey','key','keyInput']]){const el=$('#'+id).parentElement;el.classList.add('web-drop');el.addEventListener('dragover',e=>{e.preventDefault();el.classList.add('drag')});el.addEventListener('dragleave',()=>el.classList.remove('drag'));el.addEventListener('drop',e=>{e.preventDefault();el.classList.remove('drag');const files=[...e.dataTransfer.files];if(files.length!==1||!files[0].name.toLowerCase().endsWith('.pdf'))return b.toast('PDFを1つずつ追加してください');b.reference(kind,files[0])});}
   document.addEventListener('keydown',e=>{if(!e.ctrlKey&&!e.metaKey||e.altKey||e.target.closest('input,textarea,[contenteditable="true"]')||document.querySelector('dialog[open]'))return;if(e.key.toLowerCase()==='z'){e.preventDefault();move(e.shiftKey)}});
-  const tutorial=createTutorial({view:b.view,toast:b.toast});
+  const tutorial=createTutorial({view:b.view,toast:b.toast,getState:b.state,getRosterInfo:b.rosterInfo,isSaving:b.isSaving});
   return {history,refresh,preparePDF,confirmRestore,answerDialog,tutorial};
 }

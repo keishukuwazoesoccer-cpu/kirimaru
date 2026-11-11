@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-AOXcARk73BCIsNMNRxhfUSzqZlSb62RTTerWLe3FxrQ=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-Pata8eBmfv2eogA19wAQfilLxcpMUOWOqwFaBc8q/rs=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta charset="utf-8">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -211,7 +211,7 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
   #rpGrip{display:none}
 }
 </style>
-<script src="./vendor/xlsx-export.js"></script>
+<script src="./vendor/xlsx-export.js?v=task-guide-1"></script>
 <script src="./vendor/jspdf@4.2.1/dist/jspdf.umd.min.js"></script>
 <link rel="stylesheet" href="./web-tools.css">
 <link rel="canonical" href="https://zoemon-lab.github.io/kirimaru/">
@@ -550,8 +550,8 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
 
 <script src="./compatibility.js" defer></script>
 <script type="module">
-import { validateProject,validateTemplate,decodeBackupImage,acquireEditorLock } from './security.js';
-import { auditPoints,createWebTools } from './web-tools.js';
+import { validateProject,validateTemplate,decodeBackupImage,acquireEditorLock } from './security.js?v=task-guide-1';
+import { auditPoints,createWebTools } from './web-tools.js?v=task-guide-1';
 import { createAILayout } from './ai-layout.js';
 import * as pdfjsLib from './vendor/pdfjs-dist@6.3.289/legacy/build/pdf.min.mjs';
 
@@ -670,6 +670,7 @@ function busy(msg, sub = '') {
 function download(blob, name) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  window.dispatchEvent(new CustomEvent('kirimaru-download',{detail:{name}}));
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 const safeName = () => (S.name || 'test').replace(/[\\/:*?"<>|]/g, '_');
@@ -919,6 +920,7 @@ async function importReference(file,kind) {
 
 // ───────── ① 読み込み画面 ─────────
 async function renderImport() {
+  $('#btnPasteNames').textContent=S.students.length?'名簿を貼り付け':'学年名簿を登録・確認';
   webTools?.refresh();
   renderRosterBox();
   $('#projName').value = S.name;
@@ -1083,6 +1085,7 @@ $('#btnTplClear').onclick = async () => {
   const previous=S;try{await flushSave();S={...S,template:null};await writeNow();setup.bmpKey='';renderImport();}catch(e){S=previous;alert('白紙の設定を解除できませんでした：'+e.message)}
 };
 $('#btnPasteNames').onclick = () => {
+  if(!S.students.length)return openRosterDlg(S.grade);
   $('#namesText').value = '';
   $('#namesToGradeWrap').hidden = !S.grade;
   $('#namesToGradeLbl').textContent = `${S.grade}の名簿としても保存する（次のテストから自動で入ります）`;
@@ -1106,7 +1109,7 @@ $('#namesOk').onclick = () => {
 // ───── 学年ごとの名簿 ─────
 // kv 'roster:<学年>' に [{cls, no, name}] を保存し、その学年のテストで共通に使う
 const rosterKey = (g) => 'roster:' + g;
-async function getRoster(g = S.grade) { return g ? (await DB.get('kv', rosterKey(g))) || [] : []; }
+async function getRoster(g=S.grade){if(!g)return [];const rows=await DB.get('kv',rosterKey(g));if(rows?.length)return rows;return S.preparedRoster?.grade===g?S.preparedRoster.rows:[];}
 function parseRoster(text) {
   return text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((l) => {
     const c = l.split(/\t|,/).map((x) => x.trim());
@@ -1116,13 +1119,15 @@ function parseRoster(text) {
 // 名簿を答案に当てはめる。クラスが合う行を、そのクラスの答案に上から順に入れる（onlyEmpty なら氏名が空の人だけ）
 async function applyRoster(onlyEmpty) {
   const rows = await getRoster(); if (!rows.length || !S.students.length) return 0;
+  S.preparedRoster={grade:S.grade,rows:structuredClone(rows)};
   const byCls = new Map();
   for (const st of S.students) { const k = st.cls || ''; if (!byCls.has(k)) byCls.set(k, []); byCls.get(k).push(st); }
   let n = 0;
   for (const [cls, sts] of byCls) {
     let rs = rows.filter((r) => (r.cls || '') === cls);
-    // 答案側にクラス名がない（または一致する行がない）ときは、クラスが1つだけならそのまま使う
-    if (!rs.length && byCls.size === 1) rs = rows;
+    // 未指定のクラスだけを補う。明示したクラスの不一致や複数クラスは混ぜない。
+    const classes=[...new Set(rows.map(r=>r.cls||''))];
+    if(!rs.length&&byCls.size===1&&classes.length===1&&(!cls||!classes[0]))rs=rows;
     sts.forEach((st, i) => {
       const r = rs[i]; if (!r || (onlyEmpty && st.name)) return;
       st.name = r.name; if (r.no) st.no = r.no; if (r.cls && !st.cls) st.cls = r.cls;
@@ -1189,6 +1194,8 @@ $('#rosterCancel').onclick = () => $('#rosterDlg').close();
 $('#rosterOk').onclick = async () => {
   const g = roster.grade;
   await DB.put('kv', rosterKey(g), parseRoster($('#rosterText').value));
+  if(!S.grade){S.grade=g;GRADE.cur=g;await DB.put('kv','gradeCur',g);save();renderSwitch();}
+  if(S.grade===g){S.preparedRoster={grade:g,rows:parseRoster($('#rosterText').value)};save();}
   roster.dirty = false;
   $('#rosterDlg').close(); renderRosterBox();
   if (S.grade === g && S.students.length && !S.students.some((st) => st.name) && (await applyRoster(true))) { save(); renderImport(); }
@@ -1207,6 +1214,8 @@ $('#btnExportProj').onclick = async () => {
     await flushSave().catch(()=>toast('端末内の保存に失敗していても、画面の最新データを書き出します。',6000));
     const exportedAt=Date.now();
     const state = JSON.parse(JSON.stringify(S));state.backupExportedAt=exportedAt;
+    if(state.preparedRoster?.grade!==state.grade)delete state.preparedRoster;
+    if(state.grade){const rows=await getRoster(state.grade);if(rows.length)state.preparedRoster={grade:state.grade,rows:structuredClone(rows)};}
     const images = Object.create(null);
     for (const p of backupPages(state)) {
       const blob = await pageBlob(p.id);
@@ -4268,7 +4277,7 @@ function renderAll() {
 }
 
 webTools=createWebTools({
-  state:()=>S,save,toast,busy,download,getPdfjs,pdfOptions:PDFJS_OPTS,readText:readPdfTextContent,renderPdfPage,
+  state:()=>S,isSaving:()=>!!saveTimer||savesPending>0,rosterInfo:async()=>{const g=S.grade||(GRADE.cur!=="*"?GRADE.cur:"");return {grade:g,rows:await getRoster(g)}},save,toast,busy,download,markedPage,ensureAlign,confirmOutput,students:viewStudents,safeName,getPdfjs,pdfOptions:PDFJS_OPTS,readText:readPdfTextContent,renderPdfPage,
   question:curQ,student:()=>grade.order[grade.focus],view:showView,redraw:renderAll,score:(v)=>scoreFocused(v),reference:(kind,f)=>importReference(f,kind),
   meta:(sid,rid,data)=>{S.scores[sid]??={};const old=S.scores[sid][rid],next={...(old||{}),...data};webTools.history.record(sid,rid,old,next,S.checked?.[sid]);S.scores[sid][rid]=next;if(S.checked)delete S.checked[sid];save();}
 });
