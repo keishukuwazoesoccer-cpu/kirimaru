@@ -1,3 +1,4 @@
+import {createTutorial} from './tutorial.js';
 /* Public Web helpers. No AI calls, image sorting or model-answer annotation. */
 export function auditPoints(s) {
   const qs=s.regions.filter(q=>q.type==='q'), issues=[], seen=new Set();let total=0;
@@ -33,6 +34,7 @@ export function createWebTools(b){
   const guide=node('div','webGuide',$('#tabs').parentElement);$('#tabs').before(guide);guide.className='web-toolbox';
   const rosterNotice=node('div','webRosterNotice',guide.parentElement);guide.after(rosterNotice);rosterNotice.className='web-toolbox';rosterNotice.setAttribute('role','status');rosterNotice.hidden=true;
   function openRosterEntry(paste=false){b.view('import');if(paste){$('#btnPasteNames').click();return;}const table=$('#studentTable');table.closest('.card').scrollIntoView({block:'center',behavior:'smooth'});const empty=[...table.querySelectorAll('input.nm')].find(e=>!e.value.trim());empty?.focus({preventScroll:true});}
+  const backupNotice=node('div','webBackupNotice',guide.parentElement);rosterNotice.after(backupNotice);backupNotice.className='web-toolbox';backupNotice.hidden=true;let backupDismissed={};
   const panel=node('div','webPoints',$('#setupCanvasBox'));panel.className='web-toolbox';$('#setupCanvasBox').prepend(panel);
   const backup=node('p','webBackup',$('#btnExportProj').parentElement.parentElement);backup.className='help';
   const grade=node('div','webGrading',$('#grid').parentElement);$('#grid').before(grade);grade.className='web-toolbox';
@@ -59,6 +61,10 @@ export function createWebTools(b){
   $('#webHistory').onclick=()=>{const j=history.get();modal(`<h2>採点の変更履歴</h2><p>このテストの直近100操作を保存します。一括採点も1操作として戻せます。戻した後に採点を変更すると、やり直し履歴は消えます。</p><ol>${[...j.past].reverse().map(a=>`<li>${esc(new Date(a.at).toLocaleString('ja-JP'))} ${esc(a.label)}（${a.entries.length}件）</li>`).join('')}</ol>`)};
   function refresh(){const s=b.state(),a=auditPoints(s),q=b.question(),st=b.student(),sc=st&&q?s.scores[st.id]?.[q.id]:null;
     guide.innerHTML='<span>準備 → 採点 → 確認・出力</span> <button id="webNext" class="primary"></button>';
+    const revision=s.changedAt||0,hasWork=!!(s.students.length||s.regions.length||s.template||s.key||s.changedAt);
+    const needsBackup=hasWork&&(!s.backupExportedAt||revision>s.backupExportedAt)&&backupDismissed[s.id]!==revision;
+    backupNotice.hidden=!needsBackup;backupNotice.innerHTML=needsBackup?'<b>入力が済んだら、バックアップを保存してください。</b> '+(s.backupExportedAt?'前回の書き出し後に変更があります。':'このテストのバックアップはまだありません。')+'<button id="webBackupNow">バックアップを保存</button> <button id="webBackupLater">あとで</button>':'';
+    if(needsBackup){$('#webBackupNow').onclick=()=>$('#btnExportProj').click();$('#webBackupLater').onclick=()=>{backupDismissed[s.id]=revision;backupNotice.hidden=true;};}
     const missingNames=s.students.filter(st=>!String(st.name??'').trim()).length;
     rosterNotice.hidden=!missingNames;
     rosterNotice.innerHTML=missingNames?`<b>名簿の登録を確認してください</b><span> 氏名が未入力の答案が${missingNames}人分あります。採点・返却の前に、氏名と答案の対応を確認してください。</span> <button id="webRosterEntry">氏名を登録する</button> <button id="webRosterPaste">名簿を貼り付ける</button>`:'';
@@ -90,5 +96,6 @@ export function createWebTools(b){
   function confirmRestore(s){b.busy(null);return new Promise(resolve=>{modal(`<h2>バックアップの確認</h2><p>テスト：${esc(s.name)} ／ ${s.students.length}人 ／ ${s.regions.filter(q=>q.type==='q').length}問 ／ 答案 ${s.pages.length}ページ</p><p>現在のテストは残し、新しいテストとして追加します。</p><button type="button" id="webRestoreConfirm" class="primary">このバックアップを取り込む</button>`);let done=false;const finish=x=>{if(done)return;done=true;dlg.onclose=null;dlg.close();resolve(x)};dlg.onclose=()=>finish(false);$('#webRestoreConfirm').onclick=()=>finish(true)})}
   for(const [id,kind,input] of [['btnTpl','template','tplInput'],['btnKey','key','keyInput']]){const el=$('#'+id).parentElement;el.classList.add('web-drop');el.addEventListener('dragover',e=>{e.preventDefault();el.classList.add('drag')});el.addEventListener('dragleave',()=>el.classList.remove('drag'));el.addEventListener('drop',e=>{e.preventDefault();el.classList.remove('drag');const files=[...e.dataTransfer.files];if(files.length!==1||!files[0].name.toLowerCase().endsWith('.pdf'))return b.toast('PDFを1つずつ追加してください');b.reference(kind,files[0])});}
   document.addEventListener('keydown',e=>{if(!e.ctrlKey&&!e.metaKey||e.altKey||e.target.closest('input,textarea,[contenteditable="true"]')||document.querySelector('dialog[open]'))return;if(e.key.toLowerCase()==='z'){e.preventDefault();move(e.shiftKey)}});
-  return {history,refresh,preparePDF,confirmRestore,answerDialog};
+  const tutorial=createTutorial({view:b.view,toast:b.toast});
+  return {history,refresh,preparePDF,confirmRestore,answerDialog,tutorial};
 }

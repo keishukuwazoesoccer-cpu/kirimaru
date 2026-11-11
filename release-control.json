@@ -1,6 +1,6 @@
 {
   "stopAI": false,
   "stopApp": false,
-  "version": "web-2026.11.11-audit-8",
+  "version": "web-2026.11.11-audit-9",
   "reason": "公開前監査の修正。AI採点なし。AI解答欄設定は黒塗りと送信前確認が必須。"
 }
