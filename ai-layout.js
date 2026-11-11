@@ -134,6 +134,23 @@ function maskedCanvas(source, masks) {
   }
   return c;
 }
+export function describeAPIError(httpStatus, payload, secret='') {
+  let detail=typeof payload?.error?.message==='string'?payload.error.message:'';
+  if(secret)detail=detail.split(secret).join('[APIキー非表示]');
+  detail=detail.replace(/sk-ant-[A-Za-z0-9_-]+/g,'[APIキー非表示]').replace(/Bearer\s+[A-Za-z0-9._-]+/gi,'Bearer [非表示]').replace(/[\u0000-\u001f\u007f]/g,' ').slice(0,800);
+  const t=detail.toLowerCase();let advice='APIがリクエストを受け付けませんでした。下の詳細を確認してください。';
+  if(/credit balance|insufficient.{0,20}credit|billing/.test(t)||httpStatus===402)advice='APIの残高または支払い設定の問題です。Claude ConsoleのBillingでAPIクレジットと支払い状態を確認してください。';
+  else if(/spend limit|usage limit|spending limit/.test(t))advice='APIの利用上限に達しています。Claude Consoleで組織・ワークスペースの利用上限を確認してください。';
+  else if(/schema|output_config|json_schema|output_format/.test(t))advice='アプリの送信形式がAPIに受け付けられませんでした。下の詳細を報告してください。PDFや名簿を変更する必要はありません。';
+  else if(/model/.test(t)||httpStatus===404)advice='選択したAIモデルの利用可否をAI設定で確認してください。';
+  else if(/pdf|document|base64/.test(t))advice='送信する白紙PDFをAPIが読み取れませんでした。下の詳細と送信前プレビューを確認してください。';
+  else if(httpStatus===401)advice=/cors|retention/.test(t)?'この組織設定ではブラウザーからAPIを利用できません。学校・組織の管理者に確認してください。':'APIキーが認証されませんでした。AI設定に入力したキーの有効性を確認してください。';
+  else if(httpStatus===403)advice='APIの利用権限を確認してください。';
+  else if(httpStatus===429||httpStatus===529)advice='APIの利用上限または混雑です。時間を置いて手動で再実行してください。';
+  else if(httpStatus===413)advice='送信PDFがAPIのサイズ制限を超えています。';
+  const id=typeof payload?.request_id==='string'&&/^req_[A-Za-z0-9_]{1,150}$/.test(payload.request_id)?payload.request_id:'';
+  return `AIの解析に失敗しました（${httpStatus}）。${advice}${detail?'\n詳細：'+detail:''}${id?'\n問い合わせ番号：'+id:''}\n設定と点数は変更していません。自動再送はしていません。`;
+}
 export function createAILayout({ getState, loadBitmap, onApply, toast }) {
   const $ = (s) => document.querySelector(s),
     dlg = $("#layoutDlg"),
@@ -651,19 +668,8 @@ export function createAILayout({ getState, loadBitmap, onApply, toast }) {
         }),
       });
       if (!response.ok) {
-        const advice = {
-          401: "APIキーを確認してください。",
-          403: "APIの利用権限を確認してください。",
-          402: "APIの支払い・残高を確認してください。",
-          529: "AIサービスが混雑しています。しばらく待ってから手動で再実行してください。",
-          429: "利用上限または混雑です。時間を置いて再実行してください。",
-          400: "モデルまたはPDFを確認してください。",
-          404: "選択したモデルの利用可否を確認してください。",
-          413: "PDFが大きすぎます。",
-        };
-        throw Error(
-          `AIの解析に失敗しました（${response.status}）。${advice[response.status] || "時間を置いて再実行してください。"}設定と点数は変更していません。`,
-        );
+        let payload={};try{payload=await response.json()}catch{}
+        throw Error(describeAPIError(response.status,payload,key));
       }
       phase="AIの応答を読み取り、枠を検証中";tickFeedback();
       const result = await response.json();
