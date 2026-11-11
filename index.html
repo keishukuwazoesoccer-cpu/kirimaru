@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-1LbjUpZDnzluftt0TAxXkbh/psr2dthMXevjNOtjh9U=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-dtwNeAe0KrvwklyAQhiI3+r+dW0oonmfmuYAlii2E68=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta charset="utf-8">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -399,7 +399,7 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
         <button id="btnReturnPdf">返却用PDF（○×と点数入り）</button>
         <button id="btnSlips">個票を印刷</button>
         <button id="btnSlipCfg" title="教科・タイトル・載せる項目・呼び方・色などを変えます。教科ごとにひな形として保存できます">🎨 個票の設定</button>
-        <button id="btnCombo" title="表は答案を90度回転してA4縦に大きく配置。裏の個票はA4縦のままです">返却用＋個票（両面印刷）</button>
+        <button id="btnCombo" title="答案をページ順に配置し最後に個票。1人3ページなら答案3ページ＋個票の4ページ。横長の答案は90度回転してA4縦へ収めます">返却用＋個票（両面印刷）</button>
         <button id="btnCsvTally">採点集計システム用CSV</button>
         <button id="btnCustomXlsx">様式を指定してExcel</button>
         <span class="muted" id="sumInfo"></span>
@@ -550,7 +550,7 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
 <script src="./compatibility.js" defer></script>
 <script type="module">
 import { validateProject,validateTemplate,decodeBackupImage,acquireEditorLock } from './security.js?v=task-guide-1';
-import { auditPoints,createWebTools } from './web-tools.js?v=task-guide-1';
+import { auditPoints,createWebTools } from './web-tools.js?v=multi-page-1';
 import { createAILayout } from './ai-layout.js';
 import * as pdfjsLib from './vendor/pdfjs-dist@6.3.289/legacy/build/pdf.min.mjs';
 
@@ -872,7 +872,7 @@ async function importPDFs(files) {
   try { prepared=await webTools.preparePDF(files,'answers'); } catch(e) { alert('PDFを読み込めませんでした：'+e.message); return; }
   if(!prepared)return;
   const append = $('#appendMode').checked;
-  if(append && prepared.joined && S.pages.length && S.pagesPerStudent!==1) { alert('左右連結した答案は、1人1ページのテストに追加してください。'); return; }
+  if(append && S.pages.length && S.pagesPerStudent!==prepared.pagesPerStudent) { alert('追加する答案は、現在のテストと同じ1人分のページ数にしてください。'); return; }
   if (!append && S.pages.length && !confirm('新しいPDFが正常に読み込めた場合だけ答案を置き換えます。元の採点結果を残すには先にバックアップを保存してください。続けますか？')) return;
   const original = S, staged = [];
   try {
@@ -884,7 +884,7 @@ async function importPDFs(files) {
     if (S !== original) throw new Error('テストが変わったため読み込みを中止しました');
     const next = structuredClone(original);
     if (!append) { next.pages=[];next.students=[];next.scores={};next.align={};next.scoreJournal={past:[],future:[]};next.checked={}; }
-    if(prepared.joined)next.pagesPerStudent=1;
+    next.pagesPerStudent=prepared.pagesPerStudent;
     next.pages.push(...staged); next.lastCls = $('#clsName').value.trim();
     if(next.pages.length>2000)throw new Error('1つのテストは2000ページまでです。テストを分けてください');
     S=next;
@@ -4206,16 +4206,22 @@ $('#btnCombo').onclick = async () => {
     for (let i = 0; i < sts.length; i++) {
       busy('返却用＋個票を作成中…', `${i + 1} / ${sts.length}人`);
       const st = sts[i];
-      // 解答用紙は2枚ずつ表面に。1枚目の裏が個票、それ以降の裏は白紙（両面印刷で1人分がずれないように）
-      for (let pg = 0; pg < st.pageIds.length; pg += 2) {
-        const cs = [];
-        for (let k = pg; k < Math.min(pg + 2, st.pageIds.length); k++) cs.push(await markedPage(st, k, 1500));
-        pages.push(`<section class="page front"><img src="${frontImage(cs)}" alt=""></section>`);
-        pages.push(pg === 0 ? slips[i] : '<section class="page back-blank"></section>');
+      // 複数ページは合体せず原順序で返却。個票と必要な白紙で生徒間の両面ずれを防ぐ。
+      if(st.pageIds.length>1){
+        for(let pg=0;pg<st.pageIds.length;pg++){
+          const c=await markedPage(st,pg,2200);
+          const image=c.width>c.height?frontImage([c]):c.toDataURL('image/jpeg',.94);
+          pages.push(`<section class="page front"><img src="${image}" alt="答案${pg+1}ページ目"></section>`);c.width=c.height=0;
+        }
+        pages.push(slips[i]);
+        if((st.pageIds.length+1)%2)pages.push('<section class="page back-blank"></section>');
+      }else{
+        const c=await markedPage(st,0,2200),image=c.width>c.height?frontImage([c]):c.toDataURL('image/jpeg',.94);
+        pages.push(`<section class="page front"><img src="${image}" alt="答案1ページ目"></section>`,slips[i]);c.width=c.height=0;
       }
     }
     busy(null);
-    toast('答案を90度回転してA4縦に配置しました。裏の個票は縦のままです。', 8000);
+    toast('答案は元のページ順、個票はA4縦です。横長の答案だけ90度回転して収めます。', 8000);
     printOut(printDoc('返却用＋個票', pages.join(''), options));
   } catch (e) { busy(null); alert('作成に失敗しました: ' + e.message); }
 };
