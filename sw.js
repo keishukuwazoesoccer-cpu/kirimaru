@@ -1,5 +1,5 @@
 /* Web app cache only. Never stores API requests, answers, API keys, or release control. */
-const CACHE = 'kirimaru-web-20261111-audit-legacy-9';
+const CACHE = 'kirimaru-web-20261111-audit-legacy-10';
 const SHELL = ['./', './index.html', './web-release.js', './compatibility.js', './legacy-notice.js', './ai-layout.js', './web-tools.js', './tutorial.js', './security.js', './web-tools.css', './privacy.html', './support.html', './licenses.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png', './vendor/xlsx-export.js', './vendor/jspdf@4.2.1/dist/jspdf.umd.min.js', './vendor/pdfjs-dist@6.3.289/legacy/build/pdf.min.mjs', './vendor/pdfjs-dist@6.3.289/legacy/build/pdf.worker.min.mjs'];
 self.addEventListener('install', e => e.waitUntil((async () => { await (await caches.open(CACHE)).addAll(SHELL); await self.skipWaiting(); })()));
 self.addEventListener('activate', e => e.waitUntil((async () => {
