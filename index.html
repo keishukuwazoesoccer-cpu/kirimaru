@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-1qhy9fYZDERAkHn26UpWJW8oDEOaZJGsbHPBvzHC01Q=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-sLsdeMlQqzy7lbHkwMuedKb16poN+idRZaeBcDbQo+c=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta charset="utf-8">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -3715,7 +3715,7 @@ function renderSummary() {
   }
   const multi = classList().length > 1;
   // Keep identifying fields and summary scores visible while scrolling through questions.
-  const fixed = [...(multi ? [{width:50}] : []), {width:46}, {width:136}, ...ks.map(() => ({width:60})), {width:64}];
+  const fixed = [...(multi ? [{width:64}] : []), {width:52}, {width:136}, ...ks.map(() => ({width:60})), {width:64}];
   let left = 0;
   fixed.forEach(c => { c.left = left; left += c.width; });
   const cell = (tag, content, n, cls='') => {
