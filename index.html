@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-Pata8eBmfv2eogA19wAQfilLxcpMUOWOqwFaBc8q/rs=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-1qhy9fYZDERAkHn26UpWJW8oDEOaZJGsbHPBvzHC01Q=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta charset="utf-8">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -406,7 +406,7 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
       </div>
     </div>
     <div class="card" style="overflow:auto"><h2>得点一覧</h2><p class="help" style="margin-top:0">コメント欄に書いた内容は個票に印刷されます。氏名をクリックすると答案全体（スタンプ・ペンで書き込み可）を開きます。</p>
-      <p class="help">コメントは先生が入力します。成績コメントのAI生成はありません。</p><table id="sumTable"></table></div>
+      <p class="help">コメントは先生が入力します。成績コメントのAI生成はありません。</p><p class="help">氏名・観点別得点・合計は左側に固定されています。小問ごとの得点は表を左右にスクロールして確認できます。</p><div class="sum-scroll" tabindex="0" role="region" aria-label="得点一覧（左右にスクロール）"><table id="sumTable"></table></div></div>
     <div class="card" id="classCard" style="overflow:auto"></div>
     <div class="card" style="overflow:auto"><h2>誤答分析</h2><div id="report"></div></div>
     <div class="card" style="overflow:auto"><h2>旧AI判定について</h2><div id="diffList"></div></div>
@@ -3708,35 +3708,44 @@ function renderSummary() {
   webTools?.refresh();
   renderClsFilter();
   const qs = questions(), ks = usedKanten(), ds = daiList();
-  const tb = $('#sumTable');
-  const sts = viewStudents();
+  const tb = $('#sumTable'), sts = viewStudents();
   if (!S.students.length || !qs.length) {
     tb.innerHTML = '<tr><td class="muted">まだデータがありません。</td></tr>'; $('#sumInfo').textContent = '';
     $('#classCard').innerHTML = ''; $('#report').innerHTML = ''; $('#diffList').innerHTML = ''; return;
   }
   const multi = classList().length > 1;
+  // Keep identifying fields and summary scores visible while scrolling through questions.
+  const fixed = [...(multi ? [{width:50}] : []), {width:46}, {width:136}, ...ks.map(() => ({width:60})), {width:64}];
+  let left = 0;
+  fixed.forEach(c => { c.left = left; left += c.width; });
+  const cell = (tag, content, n, cls='') => {
+    const c = fixed[n];
+    return `<${tag} class="${cls}${c ? ' sum-fixed' : ''}${n === fixed.length-1 ? ' sum-fixed-edge' : ''}"${c ? ` style="left:${c.left}px;width:${c.width}px;min-width:${c.width}px;max-width:${c.width}px"` : ''}>${content}</${tag}>`;
+  };
+  const prefix = (tag, cls, no, name, values) => {
+    let n = 0;
+    return (multi ? cell(tag, cls, n++) : '') + cell(tag, no, n++) + cell(tag, name, n++, 'nm') +
+      ks.map(k => cell(tag, values.kanten(k), n++)).join('') + cell(tag, values.total, n++);
+  };
   let unscored = 0;
-  const rows = sts.map((st) => {
+  const rows = sts.map(st => {
     const t = studentTotals(st), i = S.students.indexOf(st);
-    return `<tr>${multi ? `<td>${esc(st.cls)}</td>` : ''}<td>${esc(st.no)}</td><td class="nm"><a href="#" data-i="${i}">${esc(st.name) || '（未入力）'}</a></td>` +
-      qs.map((q) => { const s = getScore(st.id, q.id)?.s; if (s == null) unscored++; return `<td>${s ?? '<span class="muted">-</span>'}</td>`; }).join('') +
-      ds.map((d) => `<td>${t.dai[d] || 0}</td>`).join('') +
-      ks.map((k) => `<td>${t.kanten[k.key]}</td>`).join('') + `<td><b>${t.total}</b></td>` +
+    return '<tr>' + prefix('td', esc(st.cls), esc(st.no), `<a href="#" data-i="${i}">${esc(st.name) || '（未入力）'}</a>`, {kanten:k=>t.kanten[k.key], total:`<b>${t.total}</b>`}) +
+      qs.map(q => { const s = getScore(st.id, q.id)?.s; if (s == null) unscored++; return `<td>${s ?? '<span class="muted">-</span>'}</td>`; }).join('') +
+      ds.map(d => `<td>${t.dai[d] || 0}</td>`).join('') +
       `<td><input class="cm" data-sid="${st.id}" value="${esc(S.comments?.[st.id] || '')}" placeholder="個票に印刷するコメント" style="width:220px"></td></tr>`;
   });
-  const av = (f) => avgOf(sts, f).toFixed(1);
-  const md = (f) => fmt1(medOf(sts, f));
-  tb.innerHTML = `<tr>${multi ? '<th>クラス</th>' : ''}<th>番号</th><th class="nm">氏名</th>${qs.map((q) => `<th>${esc(q.label)}<br><span class="muted">${q.max}点・${q.kanten}</span></th>`).join('')}` +
-    ds.map((d) => `<th>大問${esc(d)}<br><span class="muted">${daiMax(d)}点</span></th>`).join('') +
-    ks.map((k) => `<th>${k.key}<br><span class="muted">${kMaxOf(k.key)}点</span></th>`).join('') + `<th>合計<br><span class="muted">${maxTotal()}点</span></th><th>コメント</th></tr>` +
-    rows.join('') +
-    `<tr class="foot">${multi ? '<td></td>' : ''}<td></td><td class="nm">平均</td>${qs.map((q) => `<td>${av((st) => getScore(st.id, q.id)?.s || 0)}</td>`).join('')}` +
-    ds.map((d) => `<td>${av((st) => studentTotals(st).dai[d] || 0)}</td>`).join('') +
-    ks.map((k) => `<td>${av((st) => studentTotals(st).kanten[k.key])}</td>`).join('') + `<td>${av((st) => studentTotals(st).total)}</td><td></td></tr>` +
-    `<tr class="foot">${multi ? '<td></td>' : ''}<td></td><td class="nm">中央値</td>${qs.map((q) => `<td>${md((st) => getScore(st.id, q.id)?.s || 0)}</td>`).join('')}` +
-    ds.map((d) => `<td>${md((st) => studentTotals(st).dai[d] || 0)}</td>`).join('') +
-    ks.map((k) => `<td>${md((st) => studentTotals(st).kanten[k.key])}</td>`).join('') + `<td>${md((st) => studentTotals(st).total)}</td><td></td></tr>` +
-    `<tr class="foot">${multi ? '<td></td>' : ''}<td></td><td class="nm">正答率</td>${qs.map((q) => `<td>${q.max ? pct(sts.filter((st) => (getScore(st.id, q.id)?.s || 0) >= q.max).length, sts.length) : '-'}%</td>`).join('')}<td colspan="${ds.length + ks.length + 2}"></td></tr>`;
+  const av = f => avgOf(sts, f).toFixed(1), md = f => fmt1(medOf(sts, f));
+  const statsRow = (label, calc) => '<tr class="foot">' + prefix('td', '', '', label, {
+    kanten:k=>calc(st=>studentTotals(st).kanten[k.key]), total:calc(st=>studentTotals(st).total)
+  }) + qs.map(q=>`<td>${calc(st=>getScore(st.id,q.id)?.s || 0)}</td>`).join('') +
+    ds.map(d=>`<td>${calc(st=>studentTotals(st).dai[d] || 0)}</td>`).join('') + '<td></td></tr>';
+  tb.innerHTML = '<thead><tr>' + prefix('th', 'クラス', '番号', '氏名', {
+    kanten:k=>`${esc(k.key)}<br><span class="muted">${kMaxOf(k.key)}点</span>`, total:`合計<br><span class="muted">${maxTotal()}点</span>`
+  }) + qs.map(q=>`<th>${esc(q.label)}<br><span class="muted">${q.max}点・${esc(q.kanten)}</span></th>`).join('') +
+    ds.map(d=>`<th>大問${esc(d)}<br><span class="muted">${daiMax(d)}点</span></th>`).join('') + '<th>コメント</th></tr></thead><tbody>' + rows.join('') + '</tbody><tfoot>' +
+    statsRow('平均', av) + statsRow('中央値', md) + '<tr class="foot">' + prefix('td', '', '', '正答率', {kanten:()=>'', total:''}) +
+    qs.map(q=>`<td>${q.max ? pct(sts.filter(st=>(getScore(st.id,q.id)?.s || 0)>=q.max).length,sts.length) : '-'}%</td>`).join('') + `<td colspan="${ds.length+1}"></td></tr></tfoot>`;
   $('#sumInfo').textContent = unscored ? `⚠ 未採点が${unscored}件あります（0点として集計）` : 'すべて採点済みです';
   renderClassCompare(); renderReport(sts); renderDiffList(sts);
 }

@@ -2,3 +2,13 @@
 .web-dialog{box-sizing:border-box;max-width:calc(100vw - 24px)}.web-previews{grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr))}#webGuide{flex-wrap:wrap}.web-advanced{flex-basis:100%}.web-advanced>summary{cursor:pointer;margin:8px 0}.web-advanced .row{padding:8px 0}#webSourceWarning{color:#a34d00;font-weight:600}
 
 #tutorialSpot{position:fixed;z-index:9000;pointer-events:none;border:3px solid #2867e8;border-radius:7px;box-shadow:0 0 0 9999px #0009}#tutorialCard{position:fixed;z-index:9001;box-sizing:border-box;width:min(440px,calc(100vw - 16px));max-height:calc(100dvh - 16px);overflow:auto;padding:18px;background:var(--panel,#fff);color:var(--ink,#172b37);border:2px solid #2867e8;border-radius:12px;box-shadow:0 6px 28px #0005}#tutorialCard h2{font-size:20px;margin:8px 0}#tutorialCard p{line-height:1.65;margin:8px 0}#tutorialCard .row{flex-wrap:wrap}#tutorialCard .tutorial-note{font-size:12px;color:var(--muted,#555)}#tutorialCount{font-weight:bold;color:var(--accent,#2457c5)}
+
+.sum-scroll{overflow:auto;max-width:100%;isolation:isolate}
+#sumTable{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%}
+#sumTable th,#sumTable td{box-sizing:border-box;padding:6px 8px;min-width:68px;border-bottom:1px solid var(--line)}
+#sumTable .sum-fixed{position:sticky;z-index:1;background:var(--panel,#fff);overflow:hidden;text-overflow:ellipsis}
+#sumTable th.sum-fixed{z-index:2}
+#sumTable .sum-fixed-edge{border-right:2px solid var(--line);box-shadow:4px 0 5px -4px #0006}
+#sumTable tr.foot .sum-fixed{background:var(--hover,#f3f5f7)}
+#sumTable .nm a{display:block;overflow:hidden;text-overflow:ellipsis}
+.sum-scroll:focus-visible{outline:2px solid var(--accent,#2457c5);outline-offset:2px}
