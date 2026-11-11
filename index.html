@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-2Xf8C52h7jNjTmHgTElBNSm8rZjWXkJDIjdoEl4r+0w=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-1LbjUpZDnzluftt0TAxXkbh/psr2dthMXevjNOtjh9U=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta charset="utf-8">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -409,7 +409,6 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
       <p class="help">コメントは先生が入力します。成績コメントのAI生成はありません。</p><p class="help">氏名・観点別得点・合計は左側に固定されています。小問ごとの得点は表を左右にスクロールして確認できます。</p><div class="sum-scroll" tabindex="0" role="region" aria-label="得点一覧（左右にスクロール）"><table id="sumTable"></table></div></div>
     <div class="card" id="classCard" style="overflow:auto"></div>
     <div class="card" style="overflow:auto"><h2>誤答分析</h2><div id="report"></div></div>
-    <div class="card" style="overflow:auto"><h2>旧AI判定について</h2><div id="diffList"></div></div>
   </div>
 </section>
 </main>
@@ -1272,7 +1271,7 @@ $('#projInput').onchange = async (e) => {
 function resetCaches() {
   cacheEpoch++;for(const url of cropCache.values())URL.revokeObjectURL(url);for(const url of keyCache.values())URL.revokeObjectURL(url);keyCache.clear();
   blobCache.clear();cropCache.clear();refBoxCache.clear();setup.bmp?.close?.();setup.bmp=null;ext.bmp?.close?.();ext.bmp=null;
-  document.querySelectorAll('#studentTable,#grid,#keyPanel,#ckPages,#ckScores,#ckList,#ckSummary,#sumTable,#classCard,#report,#diffList,#regionList,#bulkTable,#ckTitle,#ckInfo,#gqTitle,#gqInfo,#pageDlgTitle,#extTitle').forEach(el=>el.replaceChildren());
+  document.querySelectorAll('#studentTable,#grid,#keyPanel,#ckPages,#ckScores,#ckList,#ckSummary,#sumTable,#classCard,#report,#regionList,#bulkTable,#ckTitle,#ckInfo,#gqTitle,#gqInfo,#pageDlgTitle,#extTitle').forEach(el=>el.replaceChildren());
   dlg.st=null;ext.st=null;ext.q=null;pop.st=null;hideMarkPop();slipPrevHist=null;clearTimeout(slipPrevTimer);
   document.querySelector('#webDialog')?.replaceChildren();$('#namesText').value='';for(const id of ['slipPrev','printFrame']){const frame=document.getElementById(id);frame.onload=null;frame.srcdoc='';}
   for(const id of ['setupCanvas','pageDlgCanvas','extCanvas']){const c=document.getElementById(id);c.width=c.width;}
@@ -3711,7 +3710,7 @@ function renderSummary() {
   const tb = $('#sumTable'), sts = viewStudents();
   if (!S.students.length || !qs.length) {
     tb.innerHTML = '<tr><td class="muted">まだデータがありません。</td></tr>'; $('#sumInfo').textContent = '';
-    $('#classCard').innerHTML = ''; $('#report').innerHTML = ''; $('#diffList').innerHTML = ''; return;
+    $('#classCard').innerHTML = ''; $('#report').innerHTML = ''; return;
   }
   const multi = classList().length > 1;
   // Keep identifying fields and summary scores visible while scrolling through questions.
@@ -3747,7 +3746,7 @@ function renderSummary() {
     statsRow('平均', av) + statsRow('中央値', md) + '<tr class="foot">' + prefix('td', '', '', '正答率', {kanten:()=>'', total:''}) +
     qs.map(q=>`<td>${q.max ? pct(sts.filter(st=>(getScore(st.id,q.id)?.s || 0)>=q.max).length,sts.length) : '-'}%</td>`).join('') + `<td colspan="${ds.length+1}"></td></tr></tfoot>`;
   $('#sumInfo').textContent = unscored ? `⚠ 未採点が${unscored}件あります（0点として集計）` : 'すべて採点済みです';
-  renderClassCompare(); renderReport(sts); renderDiffList(sts);
+  renderClassCompare(); renderReport(sts);
 }
 $('#sumTable').addEventListener('click', (e) => {
   const a = e.target.closest('a[data-i]'); if (!a) return;
@@ -3815,25 +3814,6 @@ function renderReport(sts) {
     ${hasAi ? '' : '<p class="help">AIによる解答の読み取り・採点は行いません。</p>'}
     <table class="rep"><tr><th>問題</th><th>正答率</th><th>平均</th><th>中央値</th><th>よくある誤答（満点でなかった答案）</th></tr>${qrows}</table>`;
 }
-
-// ───── AIと判定が違う答案 ─────
-function renderDiffList(sts) {
-  const items = [];
-  for (const q of questions()) for (const st of sts) { const sc = getScore(st.id, q.id); if (disagree(q, sc)) items.push({ q, st, sc }); }
-  $('#diffList').innerHTML = !items.length ? '<p class="muted">AI採点は廃止しました。保存済みの点数は保持しています。先生が最終確認してください。</p>'
-    : `<p class="help">AIの判定と先生の採点が違う答案です。採点ミスがないか見直しに使えます。</p><table class="rep"><tr><th>問題</th><th>生徒</th><th>AIの読み取り・判定</th><th>採点</th><th></th></tr>` +
-      items.map(({ q, st, sc }) => `<tr><td>${esc(q.label)}</td><td>${esc(st.cls)} ${esc(st.no)} ${esc(st.name)}</td>
-        <td>「${esc(sc.ai.read)}」 ${sc.ai.verdict === 'scored' ? `${sc.ai.score}点` : { correct: '正解', incorrect: '不正解' }[sc.ai.verdict]}</td><td>${sc.s} / ${q.max}</td>
-        <td><button data-q="${q.id}" data-s="${st.id}">見る</button></td></tr>`).join('') + '</table>';
-}
-$('#diffList').addEventListener('click', async (e) => {
-  const b = e.target.closest('button[data-q]'); if (!b) return;
-  grade.qid = b.dataset.q;
-  showView('grade');
-  await new Promise((r) => setTimeout(r, 300));
-  const k = grade.order.findIndex((st) => st.id === b.dataset.s);
-  if (k >= 0) setFocus(k);
-});
 
 function confirmOutput() {
   const qs=questions(),sts=viewStudents();let un=0,review=0,bad=0;
