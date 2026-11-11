@@ -31,6 +31,8 @@ export function createWebTools(b){
   const history=createScoreHistory(b.state,()=>{b.save();b.redraw();refresh()});
   const node=(tag,id,parent)=>{const n=document.createElement(tag);n.id=id;parent.append(n);return n};
   const guide=node('div','webGuide',$('#tabs').parentElement);$('#tabs').before(guide);guide.className='web-toolbox';
+  const rosterNotice=node('div','webRosterNotice',guide.parentElement);guide.after(rosterNotice);rosterNotice.className='web-toolbox';rosterNotice.setAttribute('role','status');rosterNotice.hidden=true;
+  function openRosterEntry(paste=false){b.view('import');if(paste){$('#btnPasteNames').click();return;}const table=$('#studentTable');table.closest('.card').scrollIntoView({block:'center',behavior:'smooth'});const empty=[...table.querySelectorAll('input.nm')].find(e=>!e.value.trim());empty?.focus({preventScroll:true});}
   const panel=node('div','webPoints',$('#setupCanvasBox'));panel.className='web-toolbox';$('#setupCanvasBox').prepend(panel);
   const backup=node('p','webBackup',$('#btnExportProj').parentElement.parentElement);backup.className='help';
   const grade=node('div','webGrading',$('#grid').parentElement);$('#grid').before(grade);grade.className='web-toolbox';
@@ -57,8 +59,12 @@ export function createWebTools(b){
   $('#webHistory').onclick=()=>{const j=history.get();modal(`<h2>採点の変更履歴</h2><p>このテストの直近100操作を保存します。一括採点も1操作として戻せます。戻した後に採点を変更すると、やり直し履歴は消えます。</p><ol>${[...j.past].reverse().map(a=>`<li>${esc(new Date(a.at).toLocaleString('ja-JP'))} ${esc(a.label)}（${a.entries.length}件）</li>`).join('')}</ol>`)};
   function refresh(){const s=b.state(),a=auditPoints(s),q=b.question(),st=b.student(),sc=st&&q?s.scores[st.id]?.[q.id]:null;
     guide.innerHTML='<span>準備 → 採点 → 確認・出力</span> <button id="webNext" class="primary"></button>';
-    const next=!s.students.length?'import':!a.count?'setup':s.students.some(st=>s.regions.filter(q=>q.type==='q').some(q=>s.scores[st.id]?.[q.id]?.s==null))?'grade':'check';
-    $('#webNext').textContent={import:'答案を取り込む',setup:'解答欄を設定する',grade:'採点を続ける',check:'最終確認へ'}[next];$('#webNext').onclick=()=>b.view(next);
+    const missingNames=s.students.filter(st=>!String(st.name??'').trim()).length;
+    rosterNotice.hidden=!missingNames;
+    rosterNotice.innerHTML=missingNames?`<b>名簿の登録を確認してください</b><span> 氏名が未入力の答案が${missingNames}人分あります。採点・返却の前に、氏名と答案の対応を確認してください。</span> <button id="webRosterEntry">氏名を登録する</button> <button id="webRosterPaste">名簿を貼り付ける</button>`:'';
+    if(missingNames){$('#webRosterEntry').onclick=()=>openRosterEntry();$('#webRosterPaste').onclick=()=>openRosterEntry(true);}
+    const next=!s.students.length?'import':missingNames?'roster':!a.count?'setup':s.students.some(st=>s.regions.filter(q=>q.type==='q').some(q=>s.scores[st.id]?.[q.id]?.s==null))?'grade':'check';
+    $('#webNext').textContent={import:'答案を取り込む',roster:'名簿を登録する',setup:'解答欄を設定する',grade:'採点を続ける',check:'最終確認へ'}[next];$('#webNext').onclick=()=>next==='roster'?openRosterEntry():b.view(next);
     panel.innerHTML=`<details id="webPointDetails"><summary>配点チェック：${a.count}問・合計 ${a.total}点${a.issues.length?' ／ 要確認 '+a.issues.length+'件':''}</summary><label>このテストの満点（任意） <input id="webExpected" type="number" min="0" step="0.5" value="${s.expectedMax??''}"></label><ul>${a.issues.map(t=>`<li>${esc(t)}</li>`).join('')}</ul></details>`;
     $('#webExpected').onchange=e=>{const v=e.target.value.trim();if(v!==''&&(!Number.isFinite(+v)||+v<0))return;e.target.blur();s.expectedMax=v===''?null:+v;b.save();refresh();$('#webPointDetails').open=true};
     backup.textContent=`前回のバックアップ書き出し：${s.backupExportedAt?new Date(s.backupExportedAt).toLocaleString('ja-JP'):'まだありません'}。${!s.backupExportedAt||s.changedAt>s.backupExportedAt?'作業後はファイルにも保存してください。':''} ${storageText} ※ダウンロード先への保存を確認してください。`;
