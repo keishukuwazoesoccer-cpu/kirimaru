@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-ewEc8A9PltKZTLnV6TtaQcu5+LLOoYLSBX+OYni1ypg=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-2Xf8C52h7jNjTmHgTElBNSm8rZjWXkJDIjdoEl4r+0w=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta charset="utf-8">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -399,7 +399,7 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
         <button id="btnReturnPdf">返却用PDF（○×と点数入り）</button>
         <button id="btnSlips">個票を印刷</button>
         <button id="btnSlipCfg" title="教科・タイトル・載せる項目・呼び方・色などを変えます。教科ごとにひな形として保存できます">🎨 個票の設定</button>
-        <button id="btnCombo" title="表に答案、裏に個票。下の返却用PDF設定の用紙・向きを使います。向きが自動なら答案に合わせます">返却用＋個票（両面印刷）</button>
+        <button id="btnCombo" title="表は答案を90度回転してA4縦に大きく配置。裏の個票はA4縦のままです">返却用＋個票（両面印刷）</button>
         <button id="btnCsvTally">採点集計システム用CSV</button>
         <button id="btnCustomXlsx">様式を指定してExcel</button>
         <span class="muted" id="sumInfo"></span>
@@ -4196,11 +4196,9 @@ async function markedPage(st, pg, longSide) {
   drawMarks(canvasPen(ctx, c.width, c.height), st, pg);
   return c;
 }
-// 表面の画像：横向きの解答用紙は上下に2枚並べる（回さない）。
-// 縦向きの解答用紙は横に2枚並べて、A4縦に入るよう90°回す（用紙を右に回すと読める向き）
-function frontImage(canvases, options = {}) {
-  const land = options.orientation === 'landscape';
-  const W = land ? 2400 : 1697, H = land ? 1697 : 2400, gap = 20;
+// 両面セットは答案全体（採点マーク込み）を時計回りに90度回し、A4縦へ収める。
+function frontImage(canvases) {
+  const W = 2400, H = 1697, gap = 20;
   let best;
   for (let cols = 1; cols <= canvases.length; cols++) {
     const rows = Math.ceil(canvases.length / cols), cw = (W-gap*(cols-1))/cols, ch = (H-gap*(rows-1))/rows;
@@ -4212,7 +4210,9 @@ function frontImage(canvases, options = {}) {
   const out=document.createElement('canvas');out.width=W;out.height=H;
   const ctx=out.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
   canvases.forEach((c,i)=>{const p=best.rects[i];ctx.drawImage(c,p.x,p.y,p.w,p.h)});
-  const data=out.toDataURL('image/jpeg',.94);out.width=out.height=0;return data;
+  const rotated=document.createElement('canvas');rotated.width=H;rotated.height=W;
+  const rc=rotated.getContext('2d');rc.translate(H,0);rc.rotate(Math.PI/2);rc.drawImage(out,0,0);
+  const data=rotated.toDataURL('image/jpeg',.94);out.width=out.height=0;rotated.width=rotated.height=0;return data;
 }
 $('#btnCombo').onclick = async () => {
   if(!confirmOutput())return;
@@ -4220,8 +4220,7 @@ $('#btnCombo').onclick = async () => {
   if (!sts.length || !questions().length) return toast('データがありません');
   try {
     for (let pg = 0; pg < S.pagesPerStudent; pg++) await ensureAlign(pg, (k, n) => busy('答案の位置を合わせています…', `${k} / ${n}`));
-    const pref=S.returnPdf || {}, first=S.pages.find(p=>p.id===sts[0]?.pageIds[0]);
-    const options={mixed:true,paper:pref.paper==='a3'?'a3':'a4',orientation:pref.orientation==='portrait'?'portrait':pref.orientation==='landscape'?'landscape':first?.w>first?.h?'landscape':'portrait'};
+    const options={mixed:true,paper:'a4',orientation:'portrait'};
     const slips = slipSections(sts, await slipHistData());
     const pages = [];
     for (let i = 0; i < sts.length; i++) {
@@ -4231,12 +4230,12 @@ $('#btnCombo').onclick = async () => {
       for (let pg = 0; pg < st.pageIds.length; pg += 2) {
         const cs = [];
         for (let k = pg; k < Math.min(pg + 2, st.pageIds.length); k++) cs.push(await markedPage(st, k, 1500));
-        pages.push(`<section class="page front"><img src="${frontImage(cs, options)}" alt=""></section>`);
+        pages.push(`<section class="page front"><img src="${frontImage(cs)}" alt=""></section>`);
         pages.push(pg === 0 ? slips[i] : '<section class="page back-blank"></section>');
       }
     }
     busy(null);
-    toast('答案は指定した向き、個票はA4縦です。両面印刷ではプレビューと裏面の向きを確認してください。', 8000);
+    toast('答案を90度回転してA4縦に配置しました。裏の個票は縦のままです。', 8000);
     printOut(printDoc('返却用＋個票', pages.join(''), options));
   } catch (e) { busy(null); alert('作成に失敗しました: ' + e.message); }
 };
