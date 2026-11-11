@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-sLsdeMlQqzy7lbHkwMuedKb16poN+idRZaeBcDbQo+c=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-88zUNTqB2XWtcarZc/za2yG3Ao+EblTbXVBHf7p1sMs=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta charset="utf-8">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -399,7 +399,7 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
         <button id="btnReturnPdf">返却用PDF（○×と点数入り）</button>
         <button id="btnSlips">個票を印刷</button>
         <button id="btnSlipCfg" title="教科・タイトル・載せる項目・呼び方・色などを変えます。教科ごとにひな形として保存できます">🎨 個票の設定</button>
-        <button id="btnCombo" title="表に返却用の解答用紙（横向きの解答用紙は上下に2枚並べてA4 1枚に縮小）、裏に個票。両面印刷で1人1枚になります">返却用＋個票（両面印刷）</button>
+        <button id="btnCombo" title="表に答案、裏に個票。下の返却用PDF設定の用紙・向きを使います。向きが自動なら答案に合わせます">返却用＋個票（両面印刷）</button>
         <button id="btnCsvTally">採点集計システム用CSV</button>
         <button id="btnCustomXlsx">様式を指定してExcel</button>
         <span class="muted" id="sumInfo"></span>
@@ -4136,15 +4136,18 @@ $('#slipPresetDel').onclick = async () => {
 };
 // 印刷用のページ。1ページ＝A4 1枚（用紙の余白は0にして、ページの中に余白をとる。
 // ブラウザでもMac版でも同じ大きさになるように、幅・高さはmmで固定）
-function printDoc(title, body) {
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>${esc(title)}</title><style>
-    @page{size:A4 portrait;margin:0} html,body{margin:0;padding:0}
+function printDoc(title, body, options = {}) {
+  const landscape=options.orientation==='landscape', paper=options.paper==='a3'?'A3':'A4';
+  const short=paper==='A3'?297:210,long=paper==='A3'?420:297;
+  const width=landscape?long:short,height=(landscape?short:long)-1;
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="kirimaru-print-orientation" content="${landscape?'landscape':'portrait'}"><meta name="kirimaru-print-paper" content="${paper}"><title>${esc(title)}</title><style>
+    @page{size:${paper} ${landscape?'landscape':'portrait'};margin:0} html,body{margin:0;padding:0}
     body{font-family:"Hiragino Sans","Noto Sans JP",sans-serif;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .page{width:210mm;height:296mm;box-sizing:border-box;overflow:hidden;break-after:page;page-break-after:always;position:relative}
+    .page{width:${width}mm;height:${height}mm;box-sizing:border-box;overflow:hidden;break-after:page;page-break-after:always;position:relative}
     .page:last-child{break-after:auto;page-break-after:auto}
     .slip{padding:13mm 14mm}
     .front{padding:5mm;display:flex;align-items:center;justify-content:center}
-    .front img{max-width:100%;max-height:100%;display:block}
+    .front img{width:100%;height:100%;object-fit:contain;display:block}
     .two{display:flex;gap:12px;align-items:flex-start} .two>div{flex:1;min-width:0}
     h1{font-size:18px;margin:0 0 6px} h2{font-size:14px;margin:12px 0 4px;border-left:4px solid var(--ac,#2457c5);padding-left:6px} .subt{font-size:13px;color:#444;margin:-2px 0 6px}
     .who{font-size:15px;margin:0 0 6px} .tot{font-size:16px;padding:8px 10px;background:#f1f4fb;background:color-mix(in srgb,var(--ac,#2457c5) 8%,#fff);border-radius:6px} .tot b{font-size:22px} .tot{display:flex;align-items:center;gap:14px} .tot .sc{white-space:nowrap} .tot .st{width:auto;flex:1;font-size:12px;background:#fff} .tot .st td{font-size:14px;font-weight:600}
@@ -4191,31 +4194,21 @@ async function markedPage(st, pg, longSide) {
 }
 // 表面の画像：横向きの解答用紙は上下に2枚並べる（回さない）。
 // 縦向きの解答用紙は横に2枚並べて、A4縦に入るよう90°回す（用紙を右に回すと読める向き）
-function frontImage(canvases) {
-  const land = canvases.every((c) => c.width > c.height);
-  if (land) {
-    const W = Math.max(...canvases.map((c) => c.width));
-    const parts = canvases.map((c) => ({ c, h: Math.round(c.height * W / c.width) }));
-    const gap = Math.round(W * 0.02);
-    const H = parts.reduce((a, p) => a + p.h, 0) + (parts.length - 1) * gap;
-    const col = document.createElement('canvas'); col.width = W; col.height = H;
-    const cc = col.getContext('2d'); cc.fillStyle = '#fff'; cc.fillRect(0, 0, W, H);
-    let y = 0;
-    for (const p of parts) { cc.drawImage(p.c, 0, y, W, p.h); y += p.h + gap; }
-    return col.toDataURL('image/jpeg', 0.8);
+function frontImage(canvases, options = {}) {
+  const land = options.orientation === 'landscape';
+  const W = land ? 2400 : 1697, H = land ? 1697 : 2400, gap = 20;
+  let best;
+  for (let cols = 1; cols <= canvases.length; cols++) {
+    const rows = Math.ceil(canvases.length / cols), cw = (W-gap*(cols-1))/cols, ch = (H-gap*(rows-1))/rows;
+    if (cw <= 0 || ch <= 0) continue;
+    const rects = canvases.map((c,i) => { const scale=Math.min(cw/c.width,ch/c.height),w=c.width*scale,h=c.height*scale; return {x:(i%cols)*(cw+gap)+(cw-w)/2,y:Math.floor(i/cols)*(ch+gap)+(ch-h)/2,w,h}; });
+    const area = rects.reduce((n,p)=>n+p.w*p.h,0);
+    if (!best || area > best.area) best={rects,area};
   }
-  const H = Math.max(...canvases.map((c) => c.height));
-  const parts = canvases.map((c) => ({ c, w: Math.round(c.width * H / c.height) }));
-  const W = parts.reduce((a, p) => a + p.w, 0) + (parts.length - 1) * Math.round(H * 0.02);
-  const row = document.createElement('canvas'); row.width = W; row.height = H;
-  const rc = row.getContext('2d'); rc.fillStyle = '#fff'; rc.fillRect(0, 0, W, H);
-  let x = 0;
-  for (const p of parts) { rc.drawImage(p.c, x, 0, p.w, H); x += p.w + Math.round(H * 0.02); }
-  if (W <= H) return row.toDataURL('image/jpeg', 0.8);
-  const out = document.createElement('canvas'); out.width = H; out.height = W;
-  const oc = out.getContext('2d');
-  oc.translate(0, W); oc.rotate(-Math.PI / 2); oc.drawImage(row, 0, 0);
-  return out.toDataURL('image/jpeg', 0.8);
+  const out=document.createElement('canvas');out.width=W;out.height=H;
+  const ctx=out.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  canvases.forEach((c,i)=>{const p=best.rects[i];ctx.drawImage(c,p.x,p.y,p.w,p.h)});
+  const data=out.toDataURL('image/jpeg',.94);out.width=out.height=0;return data;
 }
 $('#btnCombo').onclick = async () => {
   if(!confirmOutput())return;
@@ -4223,6 +4216,8 @@ $('#btnCombo').onclick = async () => {
   if (!sts.length || !questions().length) return toast('データがありません');
   try {
     for (let pg = 0; pg < S.pagesPerStudent; pg++) await ensureAlign(pg, (k, n) => busy('答案の位置を合わせています…', `${k} / ${n}`));
+    const pref=S.returnPdf || {}, first=S.pages.find(p=>p.id===sts[0]?.pageIds[0]);
+    const options={paper:pref.paper==='a3'?'a3':'a4',orientation:pref.orientation==='portrait'?'portrait':pref.orientation==='landscape'?'landscape':first?.w>first?.h?'landscape':'portrait'};
     const slips = slipSections(sts, await slipHistData());
     const pages = [];
     for (let i = 0; i < sts.length; i++) {
@@ -4232,13 +4227,13 @@ $('#btnCombo').onclick = async () => {
       for (let pg = 0; pg < st.pageIds.length; pg += 2) {
         const cs = [];
         for (let k = pg; k < Math.min(pg + 2, st.pageIds.length); k++) cs.push(await markedPage(st, k, 1500));
-        pages.push(`<section class="page front"><img src="${frontImage(cs)}" alt=""></section>`);
+        pages.push(`<section class="page front"><img src="${frontImage(cs, options)}" alt=""></section>`);
         pages.push(pg === 0 ? slips[i] : '<section class="page"></section>');
       }
     }
     busy(null);
     toast('印刷画面で「両面印刷（長辺とじ）」を選んでください', 6000);
-    printOut(printDoc('返却用＋個票', pages.join('')));
+    printOut(printDoc('返却用＋個票', pages.join(''), options));
   } catch (e) { busy(null); alert('作成に失敗しました: ' + e.message); }
 };
 $('#btnReturnPdf').onclick = async () => {
