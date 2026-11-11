@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-88zUNTqB2XWtcarZc/za2yG3Ao+EblTbXVBHf7p1sMs=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-ewEc8A9PltKZTLnV6TtaQcu5+LLOoYLSBX+OYni1ypg=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta charset="utf-8">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -4140,13 +4140,16 @@ function printDoc(title, body, options = {}) {
   const landscape=options.orientation==='landscape', paper=options.paper==='a3'?'A3':'A4';
   const short=paper==='A3'?297:210,long=paper==='A3'?420:297;
   const width=landscape?long:short,height=(landscape?short:long)-1;
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="kirimaru-print-orientation" content="${landscape?'landscape':'portrait'}"><meta name="kirimaru-print-paper" content="${paper}"><title>${esc(title)}</title><style>
-    @page{size:${paper} ${landscape?'landscape':'portrait'};margin:0} html,body{margin:0;padding:0}
+  const mixed=options.mixed===true;
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="kirimaru-print-orientation" content="${landscape?'landscape':'portrait'}"><meta name="kirimaru-print-mixed" content="${mixed?'true':'false'}"><meta name="kirimaru-print-paper" content="${paper}"><title>${esc(title)}</title><style>
+    @page{size:A4 portrait;margin:0}
+    @page returnfront{size:${paper} ${landscape?'landscape':'portrait'};margin:0}
+    @page reportslip{size:A4 portrait;margin:0} html,body{margin:0;padding:0}
     body{font-family:"Hiragino Sans","Noto Sans JP",sans-serif;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .page{width:${width}mm;height:${height}mm;box-sizing:border-box;overflow:hidden;break-after:page;page-break-after:always;position:relative}
+    .page{width:210mm;height:296mm;box-sizing:border-box;overflow:hidden;break-after:page;page-break-after:always;position:relative}
     .page:last-child{break-after:auto;page-break-after:auto}
-    .slip{padding:13mm 14mm}
-    .front{padding:5mm;display:flex;align-items:center;justify-content:center}
+    .slip{padding:13mm 14mm;page:reportslip}.back-blank{page:reportslip}
+    .front{page:returnfront;width:${width}mm;height:${height}mm;padding:5mm;display:flex;align-items:center;justify-content:center}
     .front img{width:100%;height:100%;object-fit:contain;display:block}
     .two{display:flex;gap:12px;align-items:flex-start} .two>div{flex:1;min-width:0}
     h1{font-size:18px;margin:0 0 6px} h2{font-size:14px;margin:12px 0 4px;border-left:4px solid var(--ac,#2457c5);padding-left:6px} .subt{font-size:13px;color:#444;margin:-2px 0 6px}
@@ -4161,6 +4164,7 @@ function printDoc(title, body, options = {}) {
   </style>
 </head><body>${body}<script>
     // 個票が1枚に入りきらないときは、その人の分だけ縮小する（少し余裕をもたせる）
+    for (const p of document.querySelectorAll('.page')) {p.dataset.pdfWidth=p.classList.contains('front')?${width}:210;p.dataset.pdfHeight=p.classList.contains('front')?${height+1}:297;}
     for (const s of document.querySelectorAll('.slip')) {
       const inn = s.firstElementChild, h = s.clientHeight - parseFloat(getComputedStyle(s).paddingTop) * 2;
       if (inn.scrollHeight > h) inn.style.zoom = (h / inn.scrollHeight * 0.96).toFixed(3);
@@ -4217,7 +4221,7 @@ $('#btnCombo').onclick = async () => {
   try {
     for (let pg = 0; pg < S.pagesPerStudent; pg++) await ensureAlign(pg, (k, n) => busy('答案の位置を合わせています…', `${k} / ${n}`));
     const pref=S.returnPdf || {}, first=S.pages.find(p=>p.id===sts[0]?.pageIds[0]);
-    const options={paper:pref.paper==='a3'?'a3':'a4',orientation:pref.orientation==='portrait'?'portrait':pref.orientation==='landscape'?'landscape':first?.w>first?.h?'landscape':'portrait'};
+    const options={mixed:true,paper:pref.paper==='a3'?'a3':'a4',orientation:pref.orientation==='portrait'?'portrait':pref.orientation==='landscape'?'landscape':first?.w>first?.h?'landscape':'portrait'};
     const slips = slipSections(sts, await slipHistData());
     const pages = [];
     for (let i = 0; i < sts.length; i++) {
@@ -4228,11 +4232,11 @@ $('#btnCombo').onclick = async () => {
         const cs = [];
         for (let k = pg; k < Math.min(pg + 2, st.pageIds.length); k++) cs.push(await markedPage(st, k, 1500));
         pages.push(`<section class="page front"><img src="${frontImage(cs, options)}" alt=""></section>`);
-        pages.push(pg === 0 ? slips[i] : '<section class="page"></section>');
+        pages.push(pg === 0 ? slips[i] : '<section class="page back-blank"></section>');
       }
     }
     busy(null);
-    toast('印刷画面で「両面印刷（長辺とじ）」を選んでください', 6000);
+    toast('答案は指定した向き、個票はA4縦です。両面印刷ではプレビューと裏面の向きを確認してください。', 8000);
     printOut(printDoc('返却用＋個票', pages.join(''), options));
   } catch (e) { busy(null); alert('作成に失敗しました: ' + e.message); }
 };
