@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-dtwNeAe0KrvwklyAQhiI3+r+dW0oonmfmuYAlii2E68=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-tKmLMWXh9dOWMFXgV+X8+7O/QfCG/ZO82cTdUb6+nXQ=' 'sha256-qNgFksX9CDx2FxO79HpxPtkfrkUTvynbZ/BbO3Y1gwQ=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta charset="utf-8">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -551,7 +551,7 @@ textarea.rub{width:100%;min-height:38px;font-size:12px}
 <script type="module">
 import { validateProject,validateTemplate,decodeBackupImage,acquireEditorLock } from './security.js?v=task-guide-1';
 import { auditPoints,createWebTools } from './web-tools.js?v=multi-page-1';
-import { createAILayout } from './ai-layout.js';
+import { createAILayout } from './ai-layout.js?v=feedback-1';
 import * as pdfjsLib from './vendor/pdfjs-dist@6.3.289/legacy/build/pdf.min.mjs';
 
 const PDF_LOCAL = new URL('./vendor/pdfjs-dist@6.3.289/', location.href).href;

@@ -147,6 +147,17 @@ export function createAILayout({ getState, loadBitmap, onApply, toast }) {
     controller = null,
     control = { stopAI: false, stopApp: false };
   if (!MODELS.includes(model)) model = MODELS[0];
+  const launchNotice=node('p');launchNotice.id='layoutLaunchNotice';launchNotice.className='help';launchNotice.setAttribute('role','status');launchNotice.hidden=true;$('#btnDetectAI').closest('.row').after(launchNotice);
+  const activity=node('div');activity.id='layoutActivity';activity.hidden=true;activity.style.cssText='position:sticky;top:0;z-index:5;padding:12px;background:var(--panel,#fff);border:2px solid #2867e8;border-radius:8px';
+  activity.innerHTML='<progress aria-label="AIの処理中"></progress><p id="layoutElapsed" role="status" style="margin:6px 0"></p><button id="layoutAbort" type="button">解析を中止</button>';
+  $('#layoutStatus').after(activity);
+  let feedbackTimer=null, phase='', startedAt=0;
+  function stopFeedback(){if(feedbackTimer!==null)clearInterval(feedbackTimer);feedbackTimer=null;activity.hidden=true;$('#layoutSend').textContent='このPDFをAnthropicへ送って解析';}
+  function tickFeedback(){const sec=Math.floor((Date.now()-startedAt)/1000);$('#layoutElapsed').textContent=`${phase} ／ 経過 ${sec}秒。最大120秒で中止します。画面を閉じずにお待ちください。`;$('#layoutSend').textContent=`解析中… ${sec}秒`;}
+  function startFeedback(){stopFeedback();startedAt=Date.now();phase='送信前の安全設定を確認中';activity.hidden=false;tickFeedback();feedbackTimer=setInterval(tickFeedback,1000);dlg.scrollTop=0;}
+  $('#layoutAbort').onclick=()=>controller?.abort();
+  function explain(message){launchNotice.hidden=false;launchNotice.textContent=message;toast(message,10000);launchNotice.scrollIntoView({block:'nearest'});}
+
   function keyStatus() {
     $("#savedKeyStatus").textContent = key
       ? (readSaved(KEY) ? "APIキーをこの専用端末に保存済みです。" : "APIキーをこのタブを閉じるまで保存しています。")
@@ -198,6 +209,7 @@ export function createAILayout({ getState, loadBitmap, onApply, toast }) {
   };
   function release() {
     serial++;
+    stopFeedback();
     controller?.abort();
     controller = null;
     drag = null;
@@ -229,6 +241,7 @@ export function createAILayout({ getState, loadBitmap, onApply, toast }) {
   }
   function status(s) {
     $("#layoutStatus").textContent = s;
+    if(dlg.open)dlg.scrollTop=0;
   }
   function stage(s) {
     for (const n of document.querySelectorAll("[data-layout-stage]"))
@@ -347,11 +360,12 @@ export function createAILayout({ getState, loadBitmap, onApply, toast }) {
     draw();
   });
   async function open() {
+    launchNotice.hidden=true;
     if (control.stopAI || control.stopApp)
-      return toast("提供元の設定でAI機能を停止しています");
+      return explain("提供元の設定でAI機能を停止しています");
     if (!key) {
       settings();
-      return toast("APIキーを入力して保存してください");
+      return explain("APIキーを入力して保存してください");
     }
     const s = getState();
     if (
@@ -359,14 +373,14 @@ export function createAILayout({ getState, loadBitmap, onApply, toast }) {
         Object.keys(row).length > 0,
       ) || s.regions.some(q=>q.teacherMemo)
     )
-      return toast(
+      return explain(
         "採点済み、または答案コメント・小問メモ・確認フラグのあるテストではAIによる解答欄の置換はできません。手動で枠を修正してください。",
         7000,
       );
     const ids = (s.template?.pages || []).map(p=>p.id);
-    if (!ids.length) return toast("①で白紙の解答用紙PDFを登録してください。生徒の答案・模範解答は送信しません");
+    if (!ids.length) return explain("①で白紙の解答用紙PDFを登録してください。生徒の答案・模範解答は送信しません");
     if (ids.length !== s.pagesPerStudent)
-      return toast("白紙の解答用紙のページ数を1人分のページ数に合わせてください");
+      return explain(`白紙は${ids.length}ページ、答案の1人分は${s.pagesPerStudent}ページです。①の「1人あたりのページ数」と白紙PDFのページ数を一致させてください。3ページの用紙なら両方を3にします。`);
     release();
     const id = serial,
       j = {
@@ -390,7 +404,8 @@ export function createAILayout({ getState, loadBitmap, onApply, toast }) {
     $("#layoutPrepare").disabled = true;
     dlg.showModal();
     try {
-      for (const pid of ids) {
+      for (const [index,pid] of ids.entries()) {
+        status(`白紙の画像を準備中… ${index+1} / ${ids.length}ページ。まだAIへ送信していません。`);
         const b = await loadBitmap(pid);
         try {
           if (id !== serial || !validJob(j)) return;
@@ -569,8 +584,10 @@ export function createAILayout({ getState, loadBitmap, onApply, toast }) {
     $("#layoutSend").disabled = true;
     $("#layoutBack").disabled = true;
     const activeController = new AbortController();
-    const requestTimer=setTimeout(()=>activeController.abort(),120000);
+    let timedOut=false;
+    const requestTimer=setTimeout(()=>{timedOut=true;activeController.abort()},120000);
     controller = activeController;
+    startFeedback();
     try {
       status("白紙の解答用紙PDFをAnthropicへ送信し、解答欄を調べています…");
       const r = await fetch("./release-control.json", {
@@ -597,6 +614,7 @@ export function createAILayout({ getState, loadBitmap, onApply, toast }) {
         );
       if (!validJob(j) || !key || activeController.signal.aborted)
         throw Error("操作を中止しました。");
+      phase=`白紙${j.pages.length}ページを送信・AIが解析中`;tickFeedback();
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         signal: activeController.signal,
@@ -636,6 +654,8 @@ export function createAILayout({ getState, loadBitmap, onApply, toast }) {
         const advice = {
           401: "APIキーを確認してください。",
           403: "APIの利用権限を確認してください。",
+          402: "APIの支払い・残高を確認してください。",
+          529: "AIサービスが混雑しています。しばらく待ってから手動で再実行してください。",
           429: "利用上限または混雑です。時間を置いて再実行してください。",
           400: "モデルまたはPDFを確認してください。",
           404: "選択したモデルの利用可否を確認してください。",
@@ -645,6 +665,7 @@ export function createAILayout({ getState, loadBitmap, onApply, toast }) {
           `AIの解析に失敗しました（${response.status}）。${advice[response.status] || "時間を置いて再実行してください。"}設定と点数は変更していません。`,
         );
       }
+      phase="AIの応答を読み取り、枠を検証中";tickFeedback();
       const result = await response.json();
       if (result.stop_reason === "max_tokens")
         throw Error(
@@ -682,7 +703,7 @@ export function createAILayout({ getState, loadBitmap, onApply, toast }) {
       if (validJob(j))
         status(
           e.name === "AbortError"
-            ? "解析を中止しました。設定と点数は変更していません。"
+            ? timedOut ? "120秒経過したため解析を中止しました（タイムアウト）。通信やAI側の混雑が考えられます。自動再送はしていません。設定と点数は変更していません。" : "操作により解析を中止しました。設定と点数は変更していません。"
             : e.name === "SyntaxError"
               ? "AIの応答を確認できませんでした。設定と点数は変更していません。"
               : e.name === "TypeError"
@@ -691,6 +712,7 @@ export function createAILayout({ getState, loadBitmap, onApply, toast }) {
         );
     } finally {
       clearTimeout(requestTimer);
+      if(controller===activeController)stopFeedback();
       if (controller === activeController) {
         controller = null;
         $("#layoutSend").disabled = false;
